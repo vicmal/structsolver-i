@@ -1772,6 +1772,7 @@ function updateTables(){
     tr.innerHTML=`<td>${elem}</td><td>${tipo}</td><td colspan="2" style="font-size:10px;font-family:var(--font-mono)">${val}</td><td><button class="btn-del" onclick="deleteLoad(${c.id})">×</button></td>`;
     ltbody.appendChild(tr);
   });
+  checkStale();
 }
 
 function updateNode(id,key,val){
@@ -2168,9 +2169,9 @@ function calcEstabilidad(){
     +'<div class="result-section-title">a) Identificación</div>'
     +'<div class="eq-box" style="line-height:2.1">'
       +'<span class="eq-label">Tipo:</span> '+(hasPortico?'Pórtico plano':'Armadura plana')+'<br>'
-      +'<span class="eq-label">n =</span> '+n+' nodos &nbsp;|&nbsp;'
-      +'<span class="eq-label"> m =</span> '+m+' barras &nbsp;|&nbsp;'
-      +'<span class="eq-label"> r =</span> '+r+' reacciones<br>'
+      +'<span class="eq-label">Nudos:</span> '+n+' &nbsp;|&nbsp;'
+      +'<span class="eq-label">Barras:</span> '+m+' &nbsp;|&nbsp;'
+      +'<span class="eq-label">Reacciones:</span> '+r+'<br>'
       +(h>0?'<span class="eq-label">h =</span> '+h+' rótulas internas ⊣⊢<br>':'')
       +'<span class="eq-label">Nodos libres:</span> '+nodosLibresStr+'<br>'
       +'<span class="eq-label">Vínculos externos:</span> '+apoyosStr
@@ -2716,7 +2717,12 @@ function calculate(){
     case 5: calcPortico(); break;
   }
   renderCanvas();
-  document.getElementById('results-badge').textContent='calculado';
+  const badge=document.getElementById('results-badge');
+  badge.textContent='calculado';
+  badge.style.background='';
+  const sb=document.getElementById('stale-banner');
+  if(sb) sb.remove();
+  AppState._lastCalcSig=modelSig();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2847,6 +2853,7 @@ function switchModule(n){
   // Mostrar/ocultar controles de diagrama
   document.getElementById('diagram-controls').classList.toggle('visible',n===5);
   AppState.resultados=null;
+  AppState._lastCalcSig=null;
   showResults('<div class="status-box status-info">ℹ Presiona "▶ Calcular" para analizar la estructura actual.</div>');
   renderCanvas();
 }
@@ -2885,15 +2892,41 @@ function showResults(html){
   document.getElementById('results-content').innerHTML=html;
 }
 
+// Firma del modelo para detectar resultados desactualizados (Bug #1)
+function modelSig(){
+  const n=AppState.nodos.map(x=>[x.id,x.x,x.y,x.support].join(':')).join('|');
+  const b=AppState.barras.map(x=>[x.id,x.ni,x.nj,x.type,x.hinge?1:0,x.hingeEnd||''].join(':')).join('|');
+  const c=AppState.cargas.map(x=>[x.id,x.tipo,x.elem,x.fx||0,x.fy||0,x.m||0,x.qi||0,x.qj||0].join(':')).join('|');
+  return AppState.modulo+'#'+n+'#'+b+'#'+c;
+}
+function checkStale(){
+  if(!AppState._lastCalcSig) return;
+  const badge=document.getElementById('results-badge');
+  let banner=document.getElementById('stale-banner');
+  if(AppState._lastCalcSig!==modelSig()){
+    badge.textContent='⚠ desactualizado';
+    badge.style.background='rgba(255,77,109,0.25)';
+    if(!banner){
+      banner=document.createElement('div');
+      banner.id='stale-banner';
+      banner.innerHTML='<div class="status-box status-error">⚠ La estructura cambió — presiona "▶ Calcular" para actualizar los resultados.</div>';
+      const rc=document.getElementById('results-content');
+      rc.insertBefore(banner, rc.firstChild);
+    }
+  } else if(banner){ banner.remove(); }
+}
+
 function updateStatusBar(){
   const hCount=AppState.barras.filter(b=>b.hinge).length;
   document.getElementById('st-nodes').textContent=AppState.nodos.length+' nodos';
   document.getElementById('st-bars').textContent=AppState.barras.length+' barras'+(hCount>0?` (${hCount} ⊣⊢)`:'');
   document.getElementById('st-loads').textContent=AppState.cargas.length+' cargas';
+  checkStale();
 }
 
 function clearAllSilent(){
   AppState.nodos=[]; AppState.barras=[]; AppState.cargas=[]; AppState.resultados=null;
+  AppState._lastCalcSig=null;
   AppState._nodeCounter=0; AppState._barCounter=0; AppState._loadCounter=0;
   AppState.cutPoints=[];
 }
@@ -3616,7 +3649,7 @@ function glClaseHTML(glP, hasPortico){
   const col=glP.GL===0?'var(--accent-green)':glP.GL<0?'var(--accent-yellow)':'var(--accent-red)';
   return '<div style="font-size:10px;color:var(--accent-cyan);font-weight:600;margin-bottom:4px">① Método de clase — GL = 3n − p</div>'
     +'<div class="eq-box" style="margin-bottom:8px">'
-    +'<span class="eq-label">n = '+glP.n+'</span> <span class="eq-comment">(elementos)</span><br>'
+    +'<span class="eq-label">n = '+glP.n+'</span> <span class="eq-comment">(n° de barras — en el método de clase, n cuenta barras)</span><br>'
     +'<span class="eq-label">Restricciones externas</span> <span class="eq-comment">(empotrado 3 · articulado 2 · rodillo 1)</span>'
     +'<table class="result-table"><tr><th>Apoyo</th><th>Tipo</th><th>Restr.</th></tr>'+ext+'</table>'
     +'<span class="eq-label">Restricciones internas por nudo</span> <span class="eq-comment">(sin apoyos · rígido: 3(k−1) · rótula: −1)</span>'

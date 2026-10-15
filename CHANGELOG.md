@@ -1,5 +1,18 @@
 # Changelog — StructSolver I
 
+## v1.4.1 — Octubre 2026 (corrección Bug #1)
+### Corregido
+- **Choque de notación en el Módulo 1:** el apartado a) Identificación usaba `n` para nudos
+  mientras el método ① `GL = 3n − p` usa `n` para barras — el panel mostraba `n = 10`
+  y `n = 11` a la vez y parecía un error de cálculo. Ahora el apartado a) usa
+  etiquetas por palabras (`Nudos:`, `Barras:`, `Reacciones:`) y el método ① aclara
+  `n = 11 (n° de barras — en el método de clase, n cuenta barras)`; se conserva
+  `GL = 3n − p` como lo enseña el profesor
+- **Aviso de resultados desactualizados:** si la estructura cambia después de calcular,
+  el panel muestra `⚠ desactualizado` y un banner "presiona ▶ Calcular para actualizar
+  los resultados" (firma del modelo + `checkStale()`); antes los resultados viejos
+  quedaban visibles sin advertencia
+
 ## v1.4.0 — Octubre 2026
 ### Agregado
 - Módulo 1: **método de clase GL = 3n − p como método principal** (①), con tabla de
