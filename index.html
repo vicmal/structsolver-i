@@ -2625,6 +2625,7 @@ function calcPortico(){
       const cargasB=AppState.cargas.filter(c=>c.elem===me.barId);
       const eq=memberEquations(me,cargasB);
       const tSet=new Set([0,0.25,0.5,0.75,1.0]);
+      for(let i=1;i<24;i++) tSet.add(i/24); // v1.4.4: muestreo fino → parábola M suave
       if(eq.sStar!=null) tSet.add(eq.sStar/me.L);
       cargasB.forEach(c=>{
         if(c.pos!=null){
@@ -2671,6 +2672,7 @@ function calcPortico(){
 
     // Puntos de evaluación
     const tPoints=new Set([0,0.25,0.5,0.75,1.0]);
+    for(let i=1;i<24;i++) tPoints.add(i/24); // v1.4.4: muestreo fino → parábola M suave
     loadsBarra.forEach(c=>{
       if(c.pos) tPoints.add(c.pos);
     });

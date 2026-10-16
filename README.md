@@ -1,12 +1,12 @@
 # StructSolver I — Análisis Estructural Estático
 
-> **v1.4.3** — Diagramas V/M/N por miembro corregidos (valores del solucionador),
-> diagramas V–M por miembro en el PDF, exportación del diagrama de la estructura
-> reparada. Método **GD = 3N − V** del profesor como método principal
-> (notación GD/N/V del video n.º 1), conversión guiada a isostática,
-> solucionador por despiece (reacciones con rótulas internas), despiece
-> elemento por elemento con ecuaciones V(s)/M(s), e instalación como app (PWA)
-> con ícono propio.
+> **v1.4.4** — Parábola de momento suavizada (25 puntos de muestreo en diagramas).
+> Diagramas V/M/N por miembro corregidos (valores del solucionador), diagramas
+> V–M por miembro en el PDF, exportación del diagrama de la estructura reparada.
+> Método **GD = 3N − V** del profesor como método principal (notación GD/N/V
+> del video n.º 1), conversión guiada a isostática, solucionador por despiece
+> (reacciones con rótulas internas), despiece elemento por elemento con
+> ecuaciones V(s)/M(s), e instalación como app (PWA) con ícono propio.
 
 Aplicación web de ingeniería estructural en un único archivo `index.html`.  
 Funciona completamente **offline** — abre con doble clic en cualquier navegador moderno.

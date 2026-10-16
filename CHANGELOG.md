@@ -1,5 +1,13 @@
 # Changelog — StructSolver I
 
+## v1.4.4 — Octubre 2026 (parábola de momento suavizada)
+### Corregido
+- **Diagrama de momento facetado:** la curva M(s) se dibujaba con solo 5 puntos
+  y a gran escala se veía como una V puntiaguda en vez de una parábola.
+  Ahora los diagramas se muestrean con 25 puntos (curva suave), tanto en el
+  canvas como en el PDF.
+- Caché del service worker: `structsolver-v143` → `structsolver-v144`.
+
 ## v1.4.3 — Octubre 2026 (diagramas y PDF corregidos)
 ### Corregido
 - **Valores de diagramas por miembro:** `Vmax`/`Mmax` se construían con un
