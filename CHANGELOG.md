@@ -1,5 +1,16 @@
 # Changelog — StructSolver I
 
+## v1.4.2 — Octubre 2026 (notación del profesor)
+### Cambiado
+- **Notación del método de clase:** `GL = 3n − p` → **`GD = 3N − V`**,
+  tal como la escribe el profesor en el pizarrón del video n.º 1
+  (N = n.º de elementos, V = Vext + Vint). Etiquetas del Módulo 1, tabla
+  comparativa, panel de conversión y mensajes de estado actualizados;
+  la matemática no cambia (mismos resultados). Los métodos secundarios
+  ②③④ conservan su notación propia.
+- Caché del service worker: `structsolver-v141` → `structsolver-v142`
+  (obliga al teléfono a tomar la versión nueva).
+
 ## v1.4.1 — Octubre 2026 (corrección Bug #1)
 ### Corregido
 - **Choque de notación en el Módulo 1:** el apartado a) Identificación usaba `n` para nudos

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StructSolver I — Análisis Estructural Estático</title>
 <meta name="theme-color" content="#080814">
-<meta name="description" content="Análisis estructural estático: grados de libertad GL = 3n − p, conversión a isostática, reacciones, despiece y diagramas V/M/N.">
+<meta name="description" content="Análisis estructural estático: GD = 3N − V, conversión a isostática, reacciones, despiece y diagramas V/M/N.">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
@@ -2011,7 +2011,7 @@ function calcEstabilidad(){
     formulaNum = 'f = '+m+' + '+r+' − 2('+n+') − '+h+' = '+m+' + '+r+' − '+(2*n)+' − '+h;
   }
 
-  // ══ MÉTODO DE CLASE: GL = 3n − p (v1.4.0, método principal) ══
+  // ══ MÉTODO DE CLASE: GD = 3N − V (v1.4.2, método principal) ══
   const glP = hasPortico ? glMetodoClase(AppState.nodos, AppState.barras) : null;
 
   let clasifTipo, clasifLabel, clasifDesc;
@@ -2213,7 +2213,7 @@ function calcEstabilidad(){
     // Tabla resumen comparativa
     +'<table class="result-table">'
       +'<tr><th>Método</th><th>Resultado</th><th>Diagnóstico</th></tr>'
-      +'<tr><td>Clase (GL)</td><td class="val">GL = '+(glP?glP.GL:'—')+'</td>'
+      +'<tr><td>Clase (GD)</td><td class="val">GD = '+(glP?glP.GL:'—')+'</td>'
         +'<td class="'+(glP?(glP.GL===0?'tension':glP.GL<0?'compress':'zero'):'')+'">'+(glP?glP.clasif:'—')+'</td></tr>'
       +'<tr><td>Clásico</td><td class="val">f = '+f+'</td>'
         +'<td class="'+(f===0?'tension':f<0?'compress':'zero')+'">'+clasifLabel+'</td></tr>'
@@ -2603,7 +2603,7 @@ function calcSecciones(){
 
 // ── Módulo 5: Pórtico ──
 function calcPortico(){
-  // v1.4.0: solucionador isostático por despiece (maneja rótulas internas)
+  // v1.4.2: solucionador isostático por despiece (maneja rótulas internas)
   const iso=solveIsoFrame(AppState.nodos, AppState.barras, AppState.cargas);
   let rxCalc, isoRes=null;
   if(iso.ok){
@@ -3192,12 +3192,12 @@ function exportPDF(){
     // ── b) ANÁLISIS — tres métodos ──
     hdrBlock('b) ANÁLISIS — Cuatro métodos de determinación');
 
-     // ① Método de clase GL = 3n-p (v1.4.0)
-     if(res.glP){ subHdr('① Método de clase — GL = 3n − p',[0,140,220]);
+     // ① Método de clase GD = 3N-V (v1.4.2)
+     if(res.glP){ subHdr('① Método de clase — GD = 3N − V',[0,140,220]);
        eqBox([
-         {t:'n = '+res.glP.n+' elementos', c:[180,180,180]},
-         {t:'p = '+res.glP.pExt+' (ext) + '+res.glP.pInt+' (int) = '+res.glP.p, c:[180,180,180]},
-         {t:'GL = 3('+res.glP.n+') − '+res.glP.p+' = '+res.glP.GL, c:[0,200,255]},
+         {t:'N = '+res.glP.n+' elementos', c:[180,180,180]},
+         {t:'V = '+res.glP.pExt+' (Vext) + '+res.glP.pInt+' (Vint) = '+res.glP.p, c:[180,180,180]},
+         {t:'GD = 3('+res.glP.n+') − '+res.glP.p+' = '+res.glP.GL, c:[0,200,255]},
          {t:res.glP.clasif, c:res.glP.GL===0?[0,230,118]:res.glP.GL<0?[255,215,0]:[255,80,100]},
        ]); }
      // ② Método clásico
@@ -3355,11 +3355,11 @@ function exportPDF(){
 // ══════════════════════════════════════════════════════════
 
 /* ═══════════════════════════════════════════════════════════════
-   StructSolver v1.4.0 — Solucionador isostático por despiece,
+   StructSolver v1.4.2 — Solucionador isostático por despiece,
    método GL = 3n−p de clase, conversión guiada y despiece.
    ═══════════════════════════════════════════════════════════════ */
 /* ============================================================================
-   StructSolver v1.4.0 — Solucionador isostático por despiece + método GL de clase
+   StructSolver v1.4.2 — Solucionador isostático por despiece + método GD de clase
    ----------------------------------------------------------------------------
    CONVENCIONES (globales):
      Fx → +x (derecha) | Fy → +y (arriba) | M → + antihorario
@@ -3384,13 +3384,13 @@ function hingeEndOfBar(bar, isSupport) {
 }
 
 /* ----------------------------------------------------------------------------
-   MÉTODO DE CLASE — GL = 3n − p
-   n = nº de elementos (barras)
-   p = restricciones externas + internas
-     externas: empotrado 3, articulado fijo 2, rodillo 1
-     internas (por nudo, SIN contar apoyos): nudo rígido con k barras → 3(k−1);
-       cada rótula interna en el nudo descuenta 1.
-   GL < 0 → hiperestática (grado |GL|) | GL = 0 → isostática | GL > 0 → inestable
+   MÉTODO DE CLASE — GD = 3N − V (notación del profesor)
+   N = nº de elementos (barras)
+   V = Vext + Vint (vínculos externos + internos)
+     Vext: empotrado 3, articulado fijo 2, rodillo 1
+     Vint (por nudo, SIN contar apoyos): nudo rígido con k barras → 3(k−1);
+       nudo articulado con k barras → 2(k−1).
+   GD < 0 → hiperestática (grado |GD|) | GD = 0 → isostática | GD > 0 → inestable
 ---------------------------------------------------------------------------- */
 function glMetodoClase(nodos, barras) {
   const nodeById = {}; nodos.forEach(x => nodeById[x.id] = x);
@@ -3622,7 +3622,7 @@ function memberEquations(me, cargasBarra) {
 
 
 /* ============================================================================
-   StructSolver v1.4.0 — UI: método GL de clase · conversión guiada · despiece
+   StructSolver v1.4.2 — UI: método GD de clase · conversión guiada · despiece
    ============================================================================ */
 
 function defaultHingeEnd(b){
@@ -3637,25 +3637,25 @@ function setHingeEnd(barId,end){
   if(b){ b.hingeEnd=end; AppState.resultados=null; renderCanvas(); }
 }
 
-/* ---------- ① Método de clase: GL = 3n − p ---------- */
+/* ---------- ① Método de clase: GD = 3N − V ---------- */
 function glClaseHTML(glP, hasPortico){
   if(!hasPortico||!glP){
-    return '<div style="font-size:10px;color:var(--accent-cyan);font-weight:600;margin-bottom:4px">① Método de clase — GL = 3n − p</div>'
+    return '<div style="font-size:10px;color:var(--accent-cyan);font-weight:600;margin-bottom:4px">① Método de clase — GD = 3N − V</div>'
       +'<div class="eq-box" style="margin-bottom:8px"><span class="eq-comment">Método de clase para pórticos. En armaduras usa el método clásico ②.</span></div>';
   }
   const ext=glP.extRows.map(r=>`<tr><td>${r.nodo}</td><td>${r.tipo}</td><td class="val">${r.r}</td></tr>`).join('');
   const intr=glP.intRows.map(r=>`<tr><td>${r.nodo}</td><td class="val">${r.barras}</td><td class="val">${r.rotulas}</td><td class="val">${r.restr}</td></tr>`).join('')
     ||'<tr><td colspan="4" class="eq-comment">sin nudos interiores</td></tr>';
   const col=glP.GL===0?'var(--accent-green)':glP.GL<0?'var(--accent-yellow)':'var(--accent-red)';
-  return '<div style="font-size:10px;color:var(--accent-cyan);font-weight:600;margin-bottom:4px">① Método de clase — GL = 3n − p</div>'
+  return '<div style="font-size:10px;color:var(--accent-cyan);font-weight:600;margin-bottom:4px">① Método de clase — GD = 3N − V</div>'
     +'<div class="eq-box" style="margin-bottom:8px">'
-    +'<span class="eq-label">n = '+glP.n+'</span> <span class="eq-comment">(n° de barras — en el método de clase, n cuenta barras)</span><br>'
-    +'<span class="eq-label">Restricciones externas</span> <span class="eq-comment">(empotrado 3 · articulado 2 · rodillo 1)</span>'
+    +'<span class="eq-label">N = '+glP.n+'</span> <span class="eq-comment">(n° de elementos — en el método de clase, N cuenta barras)</span><br>'
+    +'<span class="eq-label">Vínculos externos (Vext)</span> <span class="eq-comment">(empotrado 3 · articulado 2 · rodillo 1)</span>'
     +'<table class="result-table"><tr><th>Apoyo</th><th>Tipo</th><th>Restr.</th></tr>'+ext+'</table>'
-    +'<span class="eq-label">Restricciones internas por nudo</span> <span class="eq-comment">(sin apoyos · rígido: 3(k−1) · rótula: −1)</span>'
+    +'<span class="eq-label">Vínculos internos por nudo (Vint)</span> <span class="eq-comment">(sin apoyos · rígido: 3(k−1) · articulado: 2(k−1))</span>'
     +'<table class="result-table"><tr><th>Nudo</th><th>Barras k</th><th>Rótulas</th><th>Restr.</th></tr>'+intr+'</table>'
-    +'<span class="eq-label">p = '+glP.pExt+' + '+glP.pInt+' = '+glP.p+'</span><br>'
-    +'<span class="eq-label">GL = 3('+glP.n+') − '+glP.p+' = </span>'
+    +'<span class="eq-label">V = '+glP.pExt+' + '+glP.pInt+' = '+glP.p+'</span><br>'
+    +'<span class="eq-label">GD = 3('+glP.n+') − '+glP.p+' = </span>'
     +'<span class="eq-result" style="color:'+col+'">'+glP.GL+'</span><br>'
     +'<span class="eq-result" style="color:'+col+'">'+glP.clasif+'</span>'
     +'</div>';
@@ -3693,8 +3693,8 @@ function convApply(kind){
   const tag=document.getElementById('conv-msg');
   if(tag){
     tag.innerHTML = gl2.GL===0
-      ? '<div class="status-box status-ok">✓ GL = 0 — estructura ISOSTÁTICA. Ya puedes ir al Módulo 5 a calcular reacciones.</div>'
-      : '<div class="status-box status-warn">GL = '+gl2.GL+' — aún '+(gl2.GL<0?'sobran '+(-gl2.GL)+' vínculo(s).':'faltan '+gl2.GL+' vínculo(s).')+'</div>';
+      ? '<div class="status-box status-ok">✓ GD = 0 — estructura ISOSTÁTICA. Ya puedes ir al Módulo 5 a calcular reacciones.</div>'
+      : '<div class="status-box status-warn">GD = '+gl2.GL+' — aún '+(gl2.GL<0?'sobran '+(-gl2.GL)+' vínculo(s).':'faltan '+gl2.GL+' vínculo(s).')+'</div>';
   }
 }
 function convUndo(){
@@ -3723,7 +3723,7 @@ function convPanelHTML(f){
   return '<div class="result-section">'
     +'<div class="result-section-title">Conversión guiada a isostática</div>'
     +'<div class="eq-box" style="line-height:2">'
-    +'<strong>Sobran '+f+' vínculo(s).</strong> Libera uno por vez y verifica que GL llegue a 0.<br>'
+    +'<strong>Sobran '+f+' vínculo(s).</strong> Libera uno por vez y verifica que GD llegue a 0.<br>'
     +(apoyos.length?'<span class="eq-label">A) Cambiar apoyo:</span> <select id="conv-apoyo-nodo">'+opAp+'</select> → <select id="conv-apoyo-tipo">'+targets(apoyos[0].support)+'</select> <button class="btn" onclick="convApply(\'apoyo\')">Aplicar</button><br>':'')
     +(barras.length?'<span class="eq-label">B) Insertar rótula ⊣⊢:</span> <select id="conv-barra" onchange="convUpdExt(this.value)">'+opBa+'</select> en <select id="conv-extremo">'+opEx+'</select> <button class="btn" onclick="convApply(\'rotula\')">Aplicar</button><br>':'')
     +'<span class="eq-comment">C) Corte por sección: elimina una barra (libera 3). Hazlo desde la tabla de barras.</span><br>'
@@ -3809,7 +3809,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 <script>
-// v1.4.0 PWA: registro del Service Worker (solo en http/https, no en file://)
+// v1.4.2 PWA: registro del Service Worker (solo en http/https, no en file://)
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js').catch(()=>{});

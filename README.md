@@ -1,6 +1,6 @@
 # StructSolver I — Análisis Estructural Estático
 
-> **v1.4.0** — Método **GL = 3n − p** de clase como método principal, conversión
+> **v1.4.2** — Método **GD = 3N − V** del profesor como método principal (notación GD/N/V del video n.º 1), conversión
 > guiada a isostática, solucionador por despiece (reacciones con rótulas
 > internas), despiece elemento por elemento con ecuaciones V(s)/M(s), e
 > instalación como app (PWA) con ícono propio.
@@ -14,7 +14,7 @@ Funciona completamente **offline** — abre con doble clic en cualquier navegado
 
 | # | Módulo | Descripción |
 |---|---|---|
-| 1 | **Estabilidad y Determinación** | Cuatro métodos: **Clase (GL = 3n−p)** · Clásico · CCM · I vs E + conversión guiada |
+| 1 | **Estabilidad y Determinación** | Cuatro métodos: **Clase (GD = 3N−V)** · Clásico · CCM · I vs E + conversión guiada |
 | 2 | **Arco Triarticulado** | Reacciones externas + verificación |
 | 3 | **Armadura — Método de Nodos** | Fuerzas T/C en cada barra |
 | 4 | **Armadura — Método de Secciones** | Sistema 3×3 por corte |
@@ -27,7 +27,7 @@ Funciona completamente **offline** — abre con doble clic en cualquier navegado
 
 - Canvas SVG interactivo con snap-to-grid, zoom y pan
 - Rótulas internas ⊣⊢ con símbolo visual y descuento en fórmula
-- Cuatro métodos de análisis en Módulo 1 (el método de clase **GL = 3n − p** es el principal,
+- Cuatro métodos de análisis en Módulo 1 (el método de clase **GD = 3N − V** es el principal,
   con tabla de restricciones por nudo: rígido 3(k−1), rótula −1):
   - `f = 3m + r − 3n − h` (Método clásico)
   - `GL = 3n + 2a − 2Σmi` (Cadena Cinemática Mixta)
