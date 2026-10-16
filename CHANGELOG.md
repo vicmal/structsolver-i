@@ -1,5 +1,20 @@
 # Changelog — StructSolver I
 
+## v1.4.3 — Octubre 2026 (diagramas y PDF corregidos)
+### Corregido
+- **Valores de diagramas por miembro:** `Vmax`/`Mmax` se construían con un
+  cálculo legado que usaba reacciones de apoyo en vez de los extremos de barra
+  del solucionador (la viga mostraba V_max = 30 en vez de 15). Ahora los puntos
+  V(s)/M(s)/N(s) salen del despiece verificado; se agrega columna `N_max`.
+- **PDF sin diagrama:** la exportación SVG→PNG fallaba en silencio porque el
+  SVG no tenía `width`/`height` (rasterizaba a 0×0). Se clona con dimensiones
+  explícitas y se protege la altura de la imagen.
+- **Caracteres corruptos en el PDF:** `θ` y `⊣⊢` no existen en las fuentes de
+  jsPDF y salían como basura; se reemplazaron por `Ang.` y `(rot.)`.
+### Agregado
+- **Diagramas V–M por miembro en el PDF:** mini-diagramas cartesianos elegantes
+  (eje cero, curva, valor máximo rotulado) con sus ecuaciones V(s)/M(s).
+
 ## v1.4.2 — Octubre 2026 (notación del profesor)
 ### Cambiado
 - **Notación del método de clase:** `GL = 3n − p` → **`GD = 3N − V`**,

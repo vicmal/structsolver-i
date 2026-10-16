@@ -1,9 +1,12 @@
 # StructSolver I — Análisis Estructural Estático
 
-> **v1.4.2** — Método **GD = 3N − V** del profesor como método principal (notación GD/N/V del video n.º 1), conversión
-> guiada a isostática, solucionador por despiece (reacciones con rótulas
-> internas), despiece elemento por elemento con ecuaciones V(s)/M(s), e
-> instalación como app (PWA) con ícono propio.
+> **v1.4.3** — Diagramas V/M/N por miembro corregidos (valores del solucionador),
+> diagramas V–M por miembro en el PDF, exportación del diagrama de la estructura
+> reparada. Método **GD = 3N − V** del profesor como método principal
+> (notación GD/N/V del video n.º 1), conversión guiada a isostática,
+> solucionador por despiece (reacciones con rótulas internas), despiece
+> elemento por elemento con ecuaciones V(s)/M(s), e instalación como app (PWA)
+> con ícono propio.
 
 Aplicación web de ingeniería estructural en un único archivo `index.html`.  
 Funciona completamente **offline** — abre con doble clic en cualquier navegador moderno.
@@ -106,7 +109,8 @@ index.html
 
 ## Asignatura
 
-**Estructura II** — 
+**Estructura I** — Instituto Universitario Politécnico "Santiago Mariño"  
+Extensión Porlamar · Profa. Y. Mujica
 
 ---
 
@@ -115,5 +119,5 @@ index.html
 `1.4.0` — Octubre 2026 — Método GL de clase, conversión guiada, solucionador por
 despiece, despiece con ecuaciones y PWA.
 
-
-
+`1.3.0` — Octubre 2026  
+Desarrollado con Claude (Anthropic) · StructSolver I

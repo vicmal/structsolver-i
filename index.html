@@ -2614,7 +2614,42 @@ function calcPortico(){
   if(!rxCalc){ showResults('<div class="status-box status-error">⚠ '+(iso.message||'No se pudieron calcular las reacciones. Verifique los apoyos.')+'</div>'); return; }
 
   // Calcular esfuerzos internos por miembro
+  // v1.4.3: si el solucionador por despiece tuvo éxito, los diagramas se
+  // construyen desde sus extremos de barra (dNi/dNj) + ecuaciones V(s), M(s).
+  // El cálculo legado queda solo como respaldo si el solucionador falla.
   const diagramas=[];
+  if(isoRes && isoRes.memberEnds){
+    isoRes.memberEnds.forEach(me=>{
+      const b=AppState.barras.find(x=>x.id===me.barId);
+      if(!b) return;
+      const cargasB=AppState.cargas.filter(c=>c.elem===me.barId);
+      const eq=memberEquations(me,cargasB);
+      const tSet=new Set([0,0.25,0.5,0.75,1.0]);
+      if(eq.sStar!=null) tSet.add(eq.sStar/me.L);
+      cargasB.forEach(c=>{
+        if(c.pos!=null){
+          tSet.add(Math.max(0,c.pos-1e-4));
+          tSet.add(c.pos);
+          tSet.add(Math.min(1,c.pos+1e-4));
+        }
+      });
+      const pts=[...tSet].sort((a,z)=>a-z).map(t=>{
+        const s=t*me.L;
+        let V=eq.V0+eq.dVds*s, M=eq.M0+eq.V0*s+eq.dVds*s*s/2;
+        cargasB.forEach(c=>{ // saltos por cargas puntuales
+          if((c.tipo==='Fx'||c.tipo==='Fy')&&c.pos!=null&&s>=c.pos*me.L-1e-9){
+            V+=(c.fy||0); M+=(c.fy||0)*(s-c.pos*me.L);
+          }
+        });
+        return {t,v:R(V),m:R(M),n:R(me.dNi.N)};
+      });
+      diagramas.push({ni:b.ni,nj:b.nj,barId:me.barId,points:pts,L:me.L,
+        Vmax:Math.max(...pts.map(p=>Math.abs(p.v))),
+        Mmax:Math.max(...pts.map(p=>Math.abs(p.m))),
+        Nmax:Math.max(...pts.map(p=>Math.abs(p.n))),
+        eqV:eq.eqV,eqM:eq.eqM});
+    });
+  } else {
   AppState.barras.forEach(b=>{
     const ni=AppState.nodos.find(n=>n.id===b.ni);
     const nj=AppState.nodos.find(n=>n.id===b.nj);
@@ -2662,8 +2697,10 @@ function calcPortico(){
     diagramas.push({ni:ni.id,nj:nj.id,points:pts,
       Vmax:Math.max(...pts.map(p=>Math.abs(p.v))),
       Mmax:Math.max(...pts.map(p=>Math.abs(p.m))),
+      Nmax:Math.max(...pts.map(p=>Math.abs(p.n))),
     });
-  });
+  }); // fin respaldo legado
+  }
 
   AppState.resultados={...rxCalc,diagramas,isoDespiece:isoRes?isoRes.memberEnds:null,isoNodes:isoRes?isoRes.nodeChecks:null};
 
@@ -2676,11 +2713,11 @@ function calcPortico(){
   });
   reactHTML+='</table>';
 
-  let diagHTML=`<table class="result-table"><tr><th>Miembro</th><th>V_max</th><th>M_max</th></tr>`;
+  let diagHTML=`<table class="result-table"><tr><th>Miembro</th><th>N_max</th><th>V_max</th><th>M_max</th></tr>`;
   diagramas.forEach(d=>{
     const ni=AppState.nodos.find(n=>n.id===d.ni);
     const nj=AppState.nodos.find(n=>n.id===d.nj);
-    diagHTML+=`<tr><td>${ni?ni.name:'?'}${nj?nj.name:'?'}</td><td class="val">${d.Vmax}</td><td class="val">${d.Mmax}</td></tr>`;
+    diagHTML+=`<tr><td>${ni?ni.name:'?'}${nj?nj.name:'?'}</td><td class="val">${R(d.Nmax||0)}</td><td class="val">${d.Vmax}</td><td class="val">${d.Mmax}</td></tr>`;
   });
   diagHTML+='</table>';
 
@@ -3119,6 +3156,28 @@ function exportPDF(){
     checkPage(4); doc.setDrawColor(30,30,80); doc.setLineWidth(0.2);
     doc.line(mg,y,W-mg,y); y+=4;
   }
+  // v1.4.3: mini-diagrama cartesiano (eje cero + polilínea + valor máximo)
+  function drawMiniDiag(titulo,vals){
+    const bw=W-2*mg-8, bh=24, bx=mg+4;
+    checkPage(bh+14);
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(60,60,60);
+    doc.text(titulo,bx,y+3);
+    const y0=y+5, axY=y0+bh/2;
+    const maxA=Math.max(1e-9,...vals.map(o=>Math.abs(o.v)));
+    const sc=(bh/2-2.5)/maxA;
+    const X=t=>bx+3+t*(bw-6), Y=v=>axY-v*sc;
+    doc.setDrawColor(160,160,160); doc.setLineWidth(0.2);
+    doc.line(bx,axY,bx+bw,axY); // eje cero
+    doc.setDrawColor(0,0,0); doc.setLineWidth(0.55);
+    for(let i=1;i<vals.length;i++)
+      doc.line(X(vals[i-1].t),Y(vals[i-1].v),X(vals[i].t),Y(vals[i].v));
+    let mp=vals[0]; vals.forEach(o=>{ if(Math.abs(o.v)>Math.abs(mp.v)) mp=o; });
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(0,0,0);
+    if(Math.abs(mp.v)>1e-9) doc.text(String(R(mp.v)),X(mp.t)+1.2,Y(mp.v)-1.6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(110,110,110);
+    doc.text('0',bx,axY+4.2); doc.text('L',bx+bw-2.5,axY+4.2);
+    y=y0+bh+3; doc.setTextColor(30,30,30);
+  }
 
   // ══ ENCABEZADO ══
   doc.setFillColor(8,8,20); doc.rect(0,0,W,32,'F');
@@ -3155,7 +3214,7 @@ function exportPDF(){
   doc.text('Barras ('+AppState.barras.length+')',cx,y); y+=5.5; doc.setTextColor(30,30,30);
   doc.setFillColor(13,13,42); doc.rect(cx,y-3.5,W-cx-mg,5.5,'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(0,229,255);
-  ['Barra','L(m)','θ°','Rót.'].reduce((x,t,i)=>{ doc.text(t,x,y); return x+[16,18,16,14][i]; },cx+1);
+  ['Barra','L(m)','Ang.','Rót.'].reduce((x,t,i)=>{ doc.text(t,x,y); return x+[16,18,16,14][i]; },cx+1);
   y+=5; doc.setTextColor(50,50,50);
   AppState.barras.forEach(b=>{
     const ni=AppState.nodos.find(n=>n.id===b.ni), nj=AppState.nodos.find(n=>n.id===b.nj);
@@ -3181,7 +3240,7 @@ function exportPDF(){
     tblRow(['Nodos totales (n)', n],[70,110]);
     tblRow(['Barras / miembros (m)', m],[70,110]);
     tblRow(['Reacciones externas (r)', r],[70,110]);
-    tblRow(['Rótulas internas (h)', h+(h>0?' ⊣⊢':'')],[70,110]);
+    tblRow(['Rótulas internas (h)', h+(h>0?' (rot.)':'')],[70,110]);
     tblRow(['Nodos libres', nodosLibres],[70,110]);
     y+=2;
     line('Vínculos externos:',0,true);
@@ -3299,12 +3358,26 @@ function exportPDF(){
     }
     if(AppState.resultados && AppState.resultados.diagramas){
       subHdr('Esfuerzos máximos por miembro');
-      tblRow(['Miembro','V_max','M_max'],[40,40,40],true);
+      tblRow(['Miembro','N_max','V_max','M_max'],[36,36,36,36],true);
       AppState.resultados.diagramas.forEach(d=>{
         const ni=AppState.nodos.find(no=>no.id===d.ni);
         const nj=AppState.nodos.find(no=>no.id===d.nj);
-        tblRow([(ni?ni.name:'?')+(nj?nj.name:'?'), R(d.Vmax), R(d.Mmax)],[40,40,40]);
+        tblRow([(ni?ni.name:'?')+(nj?nj.name:'?'), R(d.Nmax||0), R(d.Vmax), R(d.Mmax)],[36,36,36,36]);
       }); y+=2;
+      // ── Diagramas V–M por miembro (v1.4.3) ──
+      hdrBlock('DIAGRAMAS V–M POR MIEMBRO');
+      AppState.resultados.diagramas.forEach(d=>{
+        const ni=AppState.nodos.find(no=>no.id===d.ni);
+        const nj=AppState.nodos.find(no=>no.id===d.nj);
+        const nom=(ni?ni.name:'?')+(nj?nj.name:'?');
+        const bM=AppState.barras.find(b=>b.ni===d.ni&&b.nj===d.nj);
+        subHdr('Miembro '+nom+(bM?' — L = '+R(getBarLength(bM))+' m':''));
+        const ul=unitLabel(), ulM=ul==='kN'?'kN·m':(ul==='Ton'?'Ton·m':'kips·ft');
+        drawMiniDiag('V ('+ul+')',d.points.map(p=>({t:p.t,v:p.v})));
+        drawMiniDiag('M ('+ulM+')',d.points.map(p=>({t:p.t,v:p.m})));
+        if(d.eqV) line('Ecuaciones: '+d.eqV+'   |   '+d.eqM,2);
+        y+=4;
+      });
     }
   }
 
@@ -3314,7 +3387,13 @@ function exportPDF(){
   checkPage(50);
   hdrBlock('DIAGRAMA DE LA ESTRUCTURA');
   const svgEl=document.getElementById('main-svg');
-  const svgData=new XMLSerializer().serializeToString(svgEl);
+  // v1.4.3: el SVG solo tiene viewBox; sin width/height la imagen rasteriza
+  // a 0x0 y el diagrama salía vacío. Se clona con dimensiones explícitas.
+  const svgClone=svgEl.cloneNode(true);
+  svgClone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  svgClone.setAttribute('width',svgW);
+  svgClone.setAttribute('height',svgH);
+  const svgData=new XMLSerializer().serializeToString(svgClone);
   const svgBlob=new Blob([svgData],{type:'image/svg+xml'});
   const url=URL.createObjectURL(svgBlob);
   const imgEl=new Image();
@@ -3325,10 +3404,13 @@ function exportPDF(){
     ctx.fillStyle='#08081a'; ctx.fillRect(0,0,cv.width,cv.height);
     ctx.drawImage(imgEl,0,0,cv.width,cv.height);
     const iw=W-2*mg;
-    const ih=Math.min(iw*(svgH/svgW), 284-y-5);
-    checkPage(ih+5);
-    doc.addImage(cv.toDataURL('image/png'),'PNG',mg,y,iw,ih);
-    y+=ih+5;
+    let ih=iw*(svgH/svgW);
+    if(y+ih+5>284){ doc.addPage(); y=mg; }
+    ih=Math.min(ih,284-y-5);
+    if(ih>12){
+      doc.addImage(cv.toDataURL('image/png'),'PNG',mg,y,iw,ih);
+      y+=ih+5;
+    }
 
     // Pie de página en todas las páginas
     const total=doc.getNumberOfPages();
