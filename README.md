@@ -106,8 +106,7 @@ index.html
 
 ## Asignatura
 
-**Estructura I** — Instituto Universitario Politécnico "Santiago Mariño"  
-Extensión Porlamar · Profa. Y. Mujica
+**Estructura II** — 
 
 ---
 
@@ -116,5 +115,5 @@ Extensión Porlamar · Profa. Y. Mujica
 `1.4.0` — Octubre 2026 — Método GL de clase, conversión guiada, solucionador por
 despiece, despiece con ecuaciones y PWA.
 
-`1.3.0` — Octubre 2026  
-Desarrollado con Claude (Anthropic) · StructSolver I
+
+
