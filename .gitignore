@@ -1,0 +1,12 @@
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sesiones guardadas localmente (no subir)
+sesion*.json
+session*.json
+struct*.json
+
+# Logs
+*.log

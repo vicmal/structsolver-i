@@ -1,5 +1,26 @@
 # Changelog — StructSolver I
 
+## v1.5.0 — Octubre 2026 (cargas posicionadas y distribuidas parciales)
+### Agregado
+- **Posición para cargas puntuales y pares:** el formulario "Agregar carga" ahora
+  pide la posición en la barra (0 = inicio, 1 = fin) cuando el elemento es una
+  barra. Las puntuales y los pares sobre barras se dibujan en su posición y
+  entran al despiece con su brazo de momento correcto.
+- **Distribuidas parciales:** las cargas uniforme y triangular aceptan
+  "Desde" y "Hasta" (fracción de barra). Permite modelar, por ejemplo, una
+  triangular que empieza a medio vano.
+### Corregido
+- **Centroide de la carga triangular:** la fórmula estaba invertida
+  (`L·(2·qi+qj)/(3·(qi+qj))` en vez de `L·(qi+2·qj)/(3·(qi+qj))`); para un
+  triángulo 0→máx daba el centroide a 1/3 del extremo cero en vez de 2/3.
+  Nunca se había ejercitado con una triangular real.
+- **Diagramas V(s)/M(s) exactos por tramos:** nueva función `internalForcesAt`
+  que integra cada carga parcial en su intervalo (la triangular genera la
+  cúbica correcta en M, no la aproximación parabólica anterior) e incluye los
+  saltos de los pares concentrados. Las ecuaciones del despiece se muestran
+  por tramos.
+- Caché del service worker: `structsolver-v144` → `structsolver-v150`.
+
 ## v1.4.4 — Octubre 2026 (parábola de momento suavizada)
 ### Corregido
 - **Diagrama de momento facetado:** la curva M(s) se dibujaba con solo 5 puntos

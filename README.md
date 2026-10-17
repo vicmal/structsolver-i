@@ -1,5 +1,8 @@
 # StructSolver I — Análisis Estructural Estático
 
+> **v1.5.0** — Cargas puntuales y pares con posición; distribuidas parciales
+> (uniforme/triangular con Desde/Hasta); centroide triangular corregido;
+> diagramas V/M exactos por tramos.
 > **v1.4.4** — Parábola de momento suavizada (25 puntos de muestreo en diagramas).
 > Diagramas V/M/N por miembro corregidos (valores del solucionador), diagramas
 > V–M por miembro en el PDF, exportación del diagrama de la estructura reparada.

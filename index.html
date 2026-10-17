@@ -1279,25 +1279,46 @@ function drawBarLabel(b){
 }
 
 function drawLoad(c){
+  const tgt=loadTarget(c);
   if(c.tipo==='Fx'||c.tipo==='Fy'){
-    const n=AppState.nodos.find(no=>no.id===c.elem);
-    if(!n) return;
-    const {sx,sy}=toSVG(n.x,n.y);
+    if(tgt==='node'){
+      const n=AppState.nodos.find(no=>no.id===c.elem);
+      if(!n) return;
+      const {sx,sy}=toSVG(n.x,n.y);
+      if(c.fx&&c.fx!==0) drawArrow(sx,sy,c.fx,0,'#ff7b3d',c.fx);
+      if(c.fy&&c.fy!==0) drawArrow(sx,sy,0,c.fy,'#ff7b3d',c.fy);
+      return;
+    }
+    const b=AppState.barras.find(ba=>ba.id===c.elem); // v1.5: puntual sobre barra
+    if(!b) return;
+    const t=(c.pos==null?0.5:c.pos);
+    const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+    if(!ni||!nj) return;
+    const {sx:x1,sy:y1}=toSVG(ni.x,ni.y), {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
+    const sx=x1+(x2-x1)*t, sy=y1+(y2-y1)*t;
     if(c.fx&&c.fx!==0) drawArrow(sx,sy,c.fx,0,'#ff7b3d',c.fx);
     if(c.fy&&c.fy!==0) drawArrow(sx,sy,0,c.fy,'#ff7b3d',c.fy);
   } else if(c.tipo==='M'){
-    const n=AppState.nodos.find(no=>no.id===c.elem);
-    if(!n) return;
-    const {sx,sy}=toSVG(n.x,n.y);
-    drawMoment(sx,sy,c.m);
+    if(tgt==='node'){
+      const n=AppState.nodos.find(no=>no.id===c.elem);
+      if(!n) return;
+      const {sx,sy}=toSVG(n.x,n.y); drawMoment(sx,sy,c.m); return;
+    }
+    const b=AppState.barras.find(ba=>ba.id===c.elem); // v1.5: par sobre barra
+    if(!b) return;
+    const t=(c.pos==null?0.5:c.pos);
+    const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+    if(!ni||!nj) return;
+    const {sx:x1,sy:y1}=toSVG(ni.x,ni.y), {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
+    drawMoment(x1+(x2-x1)*t,y1+(y2-y1)*t,c.m);
   } else if(c.tipo==='dist'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.q,c.q,'uniform');
+    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b);
   } else if(c.tipo==='dist_tri'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.qi,c.qj,'triangular');
+    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b);
   }
 }
 
@@ -1343,27 +1364,29 @@ function drawMoment(sx,sy,val,color){
   svgText(sx,sy-r-10,`M=${R(val)}`,color,10,'middle');
 }
 
-function drawDistLoad(b,qi,qj,tipo){
+function drawDistLoad(b,qi,qj,tipo,la,lb){
   const ni=AppState.nodos.find(n=>n.id===b.ni);
   const nj=AppState.nodos.find(n=>n.id===b.nj);
   if(!ni||!nj) return;
+  la=(la==null?0:la); lb=(lb==null?1:lb);
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
   const n=8;
   const scaleArrow=30;
+  const qAbs=Math.abs(qi)+Math.abs(qj)+0.001;
+  const alen=t=>Math.min(40,Math.abs(qi+(qj-qi)*t)*scaleArrow/qAbs);
   for(let i=0;i<=n;i++){
     const t=i/n;
-    const qv=qi+(qj-qi)*t;
-    const bx=x1+(x2-x1)*t;
-    const by=y1+(y2-y1)*t;
-    const len=Math.min(40,Math.abs(qv)*scaleArrow/(Math.abs(qi)+Math.abs(qj)+0.001));
-    svgLine(bx,by,bx,by-len,'#ff7b3d',1.5);
+    const u=la+(lb-la)*t;
+    const bx=x1+(x2-x1)*u;
+    const by=y1+(y2-y1)*u;
+    svgLine(bx,by,bx,by-alen(t),'#ff7b3d',1.5);
   }
-  // Línea superior
-  const lenI=Math.min(40,Math.abs(qi)*scaleArrow/(Math.abs(qi)+Math.abs(qj)+0.001));
-  const lenJ=Math.min(40,Math.abs(qj)*scaleArrow/(Math.abs(qi)+Math.abs(qj)+0.001));
-  svgLine(x1,y1-lenI,x2,y2-lenJ,'#ff7b3d',1.5);
-  svgText((x1+x2)/2,(y1+y2)/2-lenI-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}`,
+  // Línea superior (solo el tramo cargado)
+  const xa=x1+(x2-x1)*la, ya=y1+(y2-y1)*la;
+  const xb=x1+(x2-x1)*lb, yb=y1+(y2-y1)*lb;
+  svgLine(xa,ya-alen(0),xb,yb-alen(1),'#ff7b3d',1.5);
+  svgText((xa+xb)/2,(ya+yb)/2-alen(0)-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}`,
           '#ff7b3d',10,'middle');
 }
 
@@ -1591,7 +1614,7 @@ function ctxAction(action){
           const fx=+document.getElementById('m-fx').value;
           const fy=+document.getElementById('m-fy').value;
           if(fx!==0||fy!==0){
-            AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,tipo:'Fx',fx,fy});
+            AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'node',tipo:'Fx',fx,fy});
             updateTables(); renderCanvas(); updateStatusBar();
           }
         });
@@ -1604,7 +1627,7 @@ function ctxAction(action){
       ()=>{
         const m=+document.getElementById('m-m').value;
         if(m!==0){
-          AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,tipo:'M',m});
+          AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'node',tipo:'M',m});
           updateTables(); renderCanvas(); updateStatusBar();
         }
       });
@@ -1626,12 +1649,17 @@ function ctxAction(action){
         <select id="m-dtype"><option value="dist">Uniforme</option><option value="dist_tri">Triangular</option></select>
        </div>
        <div class="modal-row"><label>q inicial (${unitLabel()}/m)</label><input id="m-qi" type="number" step="0.5" value="5"></div>
-       <div class="modal-row"><label>q final (solo triangular)</label><input id="m-qj" type="number" step="0.5" value="0"></div>`,
+       <div class="modal-row"><label>q final (solo triangular)</label><input id="m-qj" type="number" step="0.5" value="0"></div>
+       <div class="modal-row"><label>Desde (0–1)</label><input id="m-qa" type="number" step="0.05" min="0" max="1" value="0"></div>
+       <div class="modal-row"><label>Hasta (0–1)</label><input id="m-qb" type="number" step="0.05" min="0" max="1" value="1"></div>`,
       ()=>{
         const tipo=document.getElementById('m-dtype').value;
         const qi=+document.getElementById('m-qi').value;
         const qj=tipo==='dist_tri'?+document.getElementById('m-qj').value:qi;
-        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,tipo,q:qi,qi,qj});
+        const clamp01=v=>Math.min(1,Math.max(0,isNaN(v)?0:v));
+        let qa=clamp01(+document.getElementById('m-qa').value||0), qb=clamp01(+document.getElementById('m-qb').value||1);
+        if(qb<=qa) qb=1;
+        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'bar',tipo,q:qi,qi,qj,a:qa,b:qb});
         updateTables(); renderCanvas(); updateStatusBar();
       });
   }
@@ -1696,6 +1724,21 @@ function addBar(niId,njId){
 // ══════════════════════════════════════════════════════════
 // 7. TABLAS FORMULARIO
 // ══════════════════════════════════════════════════════════
+/* v1.5 — Las cargas distinguen su objetivo: 'node' o 'bar'.
+   (Antes, los IDs de nudos y barras compartían numeración y una puntual
+   sobre una barra podía contarse dos veces.) */
+function loadTarget(c, nodos){
+  if(c.elemType) return c.elemType;
+  if(c.tipo==='dist'||c.tipo==='dist_tri') return 'bar';
+  const ns = nodos || (typeof AppState!=='undefined' ? AppState.nodos : []);
+  return ns.some(n=>n.id===c.elem) ? 'node' : 'bar';
+}
+function barName(id){
+  const b=AppState.barras.find(ba=>ba.id===id);
+  if(!b) return '?';
+  const ni=AppState.nodos.find(n=>n.id===b.ni), nj=AppState.nodos.find(n=>n.id===b.nj);
+  return ni&&nj?ni.name+nj.name:'?';
+}
 function updateTables(){
   // Tabla nodos
   const tbody=document.getElementById('nodes-tbody');
@@ -1749,24 +1792,26 @@ function updateTables(){
     const tr=document.createElement('tr');
     let elem='?', val='', tipo='';
     if(c.tipo==='Fx'||c.tipo==='Fy'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
-      elem=n?n.name:'?';
-      val=`Fx=${c.fx}, Fy=${c.fy}`;
+      elem=loadTarget(c)==='node'
+        ? (AppState.nodos.find(no=>no.id===c.elem)||{name:'?'}).name
+        : barName(c.elem);
+      val=`Fx=${c.fx}, Fy=${c.fy}`+(c.pos!=null?` @${c.pos}`:'');
       tipo='Fuerza';
     } else if(c.tipo==='M'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
-      elem=n?n.name:'?';
-      val=`M=${c.m}`;
+      elem=loadTarget(c)==='node'
+        ? (AppState.nodos.find(no=>no.id===c.elem)||{name:'?'}).name
+        : barName(c.elem);
+      val=`M=${c.m}`+(c.pos!=null?` @${c.pos}`:'');
       tipo='Momento';
     } else if(c.tipo==='dist'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      val=`q=${c.q}`;
+      val=`q=${c.q}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Dist.';
     } else if(c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      val=`qi=${c.qi}→qj=${c.qj}`;
+      val=`qi=${c.qi}→qj=${c.qj}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Tri.';
     }
     tr.innerHTML=`<td>${elem}</td><td>${tipo}</td><td colspan="2" style="font-size:10px;font-family:var(--font-mono)">${val}</td><td><button class="btn-del" onclick="deleteLoad(${c.id})">×</button></td>`;
@@ -1785,13 +1830,13 @@ function updateNode(id,key,val){
 function deleteNode(id){
   AppState.nodos=AppState.nodos.filter(n=>n.id!==id);
   AppState.barras=AppState.barras.filter(b=>b.ni!==id&&b.nj!==id);
-  AppState.cargas=AppState.cargas.filter(c=>c.elem!==id);
+  AppState.cargas=AppState.cargas.filter(c=>!(c.elem===id&&loadTarget(c)==='node'));
   AppState.resultados=null;
   renderCanvas(); updateTables(); updateStatusBar();
 }
 function deleteBar(id){
   AppState.barras=AppState.barras.filter(b=>b.id!==id);
-  AppState.cargas=AppState.cargas.filter(c=>c.elem!==id);
+  AppState.cargas=AppState.cargas.filter(c=>!(c.elem===id&&loadTarget(c)==='bar'));
   AppState.resultados=null;
   renderCanvas(); updateTables(); updateStatusBar();
 }
@@ -1836,9 +1881,9 @@ function addLoadForm(){
     return `<option value="B${b.id}">${ni?ni.name:''}${nj?nj.name:''} (barra)</option>`;
   }).join('');
   showModal('Agregar carga',
-    `<div class="modal-row"><label>Elemento</label><select id="m-lelem">${nodeOpts}${barOpts}</select></div>
+    `<div class="modal-row"><label>Elemento</label><select id="m-lelem" onchange="toggleLoadFields()">${nodeOpts}${barOpts}</select></div>
      <div class="modal-row"><label>Tipo</label>
-       <select id="m-ltype" onchange="toggleLoadFields(this.value)">
+       <select id="m-ltype" onchange="toggleLoadFields()">
          <option value="Fx">Fuerza puntual</option>
          <option value="M">Momento</option>
          <option value="dist">Distribuida uniforme</option>
@@ -1858,26 +1903,39 @@ function addLoadForm(){
      <div id="lf-tri" style="display:none">
        <div class="modal-row"><label>q inicial</label><input id="m-lqi" type="number" step="0.5" value="5"></div>
        <div class="modal-row"><label>q final</label><input id="m-lqj" type="number" step="0.5" value="0"></div>
+     </div>
+     <div id="lf-pos" style="display:none">
+       <div class="modal-row"><label>Posición en la barra (0=ini, 1=fin)</label><input id="m-lpos" type="number" step="0.05" min="0" max="1" value="0.5"></div>
+     </div>
+     <div id="lf-range" style="display:none">
+       <div class="modal-row"><label>Desde (0–1)</label><input id="m-la" type="number" step="0.05" min="0" max="1" value="0"></div>
+       <div class="modal-row"><label>Hasta (0–1)</label><input id="m-lb" type="number" step="0.05" min="0" max="1" value="1"></div>
      </div>`,
     ()=>{
       const sel=document.getElementById('m-lelem').value;
       const tipo=document.getElementById('m-ltype').value;
       const isNode=sel.startsWith('N');
       const id=+sel.slice(1);
-      const c={id:++AppState._loadCounter,elem:id,tipo};
-      if(tipo==='Fx'){ c.fx=+document.getElementById('m-lfx').value; c.fy=+document.getElementById('m-lfy').value; }
-      else if(tipo==='M'){ c.m=+document.getElementById('m-lm').value; }
-      else if(tipo==='dist'){ c.q=+document.getElementById('m-lq').value; c.qi=c.q; c.qj=c.q; }
-      else if(tipo==='dist_tri'){ c.qi=+document.getElementById('m-lqi').value; c.qj=+document.getElementById('m-lqj').value; c.q=c.qi; }
+      const c={id:++AppState._loadCounter,elem:id,elemType:isNode?'node':'bar',tipo};
+      const clamp01=v=>Math.min(1,Math.max(0,isNaN(v)?0:v));
+      if(tipo==='Fx'){ c.fx=+document.getElementById('m-lfx').value; c.fy=+document.getElementById('m-lfy').value; if(!isNode) c.pos=clamp01(+document.getElementById('m-lpos').value||0.5); }
+      else if(tipo==='M'){ c.m=+document.getElementById('m-lm').value; if(!isNode) c.pos=clamp01(+document.getElementById('m-lpos').value||0.5); }
+      else if(tipo==='dist'){ c.q=+document.getElementById('m-lq').value; c.qi=c.q; c.qj=c.q; c.a=clamp01(+document.getElementById('m-la').value||0); c.b=clamp01(+document.getElementById('m-lb').value||1); if(c.b<=c.a) c.b=1; }
+      else if(tipo==='dist_tri'){ c.qi=+document.getElementById('m-lqi').value; c.qj=+document.getElementById('m-lqj').value; c.q=c.qi; c.a=clamp01(+document.getElementById('m-la').value||0); c.b=clamp01(+document.getElementById('m-lb').value||1); if(c.b<=c.a) c.b=1; }
       AppState.cargas.push(c);
       updateTables(); renderCanvas(); updateStatusBar();
     });
 }
-function toggleLoadFields(v){
+function toggleLoadFields(){
+  const v=document.getElementById('m-ltype').value;
+  const sel=document.getElementById('m-lelem').value;
+  const isBar=sel.startsWith('B');
   document.getElementById('lf-force').style.display=v==='Fx'?'block':'none';
   document.getElementById('lf-moment').style.display=v==='M'?'block':'none';
   document.getElementById('lf-dist').style.display=v==='dist'?'block':'none';
   document.getElementById('lf-tri').style.display=v==='dist_tri'?'block':'none';
+  document.getElementById('lf-pos').style.display=((v==='Fx'||v==='M')&&isBar)?'block':'none';
+  document.getElementById('lf-range').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1930,13 +1988,12 @@ function calcReactions(){
       if(!ni||!nj) return;
       const L=getBarLength(b);
       const qi=c.qi||c.q||0, qj=c.qj||c.q||0;
+      const t0=c.a??0, t1=c.b??1, span=Math.max(0,t1-t0); // v1.5: tramo parcial
       // Resultante y brazo de momento
-      const Funiforma=(qi===qj)?qi*L:0;
-      const Fconc=(qi!==qj)?(qj-qi)*L/2:0;
-      const xcg=c.tipo==='dist'?
-        ((ni.x+nj.x)/2):
-        (ni.x+2*(nj.x-ni.x)/3);
-      SM-=((qi*L)*(xcg-ref.x));
+      const Rres=((qi+qj)/2)*span*L;
+      const tc=(Math.abs(qi+qj)<1e-12)?(t0+t1)/2:t0+span*(qi+2*qj)/(3*(qi+qj)); // v1.5: centroide corregido
+      const xcg=ni.x+(nj.x-ni.x)*tc;
+      SM-=(Rres*(xcg-ref.x));
     }
   });
 
@@ -2622,11 +2679,12 @@ function calcPortico(){
     isoRes.memberEnds.forEach(me=>{
       const b=AppState.barras.find(x=>x.id===me.barId);
       if(!b) return;
-      const cargasB=AppState.cargas.filter(c=>c.elem===me.barId);
+      const cargasB=AppState.cargas.filter(c=>c.elem===me.barId && loadTarget(c)==='bar');
       const eq=memberEquations(me,cargasB);
       const tSet=new Set([0,0.25,0.5,0.75,1.0]);
       for(let i=1;i<24;i++) tSet.add(i/24); // v1.4.4: muestreo fino → parábola M suave
       if(eq.sStar!=null) tSet.add(eq.sStar/me.L);
+      (eq.bounds||[]).forEach(x=>tSet.add(x/me.L)); // v1.5: fronteras de cargas parciales
       cargasB.forEach(c=>{
         if(c.pos!=null){
           tSet.add(Math.max(0,c.pos-1e-4));
@@ -2636,12 +2694,7 @@ function calcPortico(){
       });
       const pts=[...tSet].sort((a,z)=>a-z).map(t=>{
         const s=t*me.L;
-        let V=eq.V0+eq.dVds*s, M=eq.M0+eq.V0*s+eq.dVds*s*s/2;
-        cargasB.forEach(c=>{ // saltos por cargas puntuales
-          if((c.tipo==='Fx'||c.tipo==='Fy')&&c.pos!=null&&s>=c.pos*me.L-1e-9){
-            V+=(c.fy||0); M+=(c.fy||0)*(s-c.pos*me.L);
-          }
-        });
+        const {V,M}=internalForcesAt(me,cargasB,s); // v1.5: exacto por tramos
         return {t,v:R(V),m:R(M),n:R(me.dNi.N)};
       });
       diagramas.push({ni:b.ni,nj:b.nj,barId:me.barId,points:pts,L:me.L,
@@ -2663,8 +2716,8 @@ function calcPortico(){
     // Fuerzas en nodo i (reacciones + cargas nodales)
     const rxI=rxCalc.reacciones.find(r=>r.nodeId===ni.id);
     const rxJ=rxCalc.reacciones.find(r=>r.nodeId===nj.id);
-    const cargsI=AppState.cargas.filter(c=>c.elem===ni.id&&c.tipo==='Fx');
-    const cargsJ=AppState.cargas.filter(c=>c.elem===nj.id&&c.tipo==='Fx');
+    const cargsI=AppState.cargas.filter(c=>c.elem===ni.id&&c.tipo==='Fx'&&loadTarget(c)==='node');
+    const cargsJ=AppState.cargas.filter(c=>c.elem===nj.id&&c.tipo==='Fx'&&loadTarget(c)==='node');
 
     let V0=-(rxI?.fy||0)-cargsI.reduce((s,c)=>s+(c.fy||0),0);
     let N0=-(rxI?.fx||0)-cargsI.reduce((s,c)=>s+(c.fx||0),0);
@@ -2850,7 +2903,7 @@ function addB(niName,njName,type){
 function addC(nodeName,tipo,fx,fy){
   const n=AppState.nodos.find(no=>no.name===nodeName);
   if(!n) return;
-  AppState.cargas.push({id:++AppState._loadCounter,elem:n.id,tipo,fx:fx||0,fy:fy||0});
+  AppState.cargas.push({id:++AppState._loadCounter,elem:n.id,elemType:'node',tipo,fx:fx||0,fy:fy||0});
 }
 function addCDist(barName,q){
   // barName como "AC"
@@ -2859,7 +2912,7 @@ function addCDist(barName,q){
   if(!ni||!nj) return;
   const b=AppState.barras.find(b=>(b.ni===ni.id&&b.nj===nj.id)||(b.ni===nj.id&&b.nj===ni.id));
   if(!b) return;
-  AppState.cargas.push({id:++AppState._loadCounter,elem:b.id,tipo:'dist',q,qi:q,qj:q});
+  AppState.cargas.push({id:++AppState._loadCounter,elem:b.id,elemType:'bar',tipo:'dist',q,qi:q,qj:q});
 }
 function center(){
   // Centrar vista
@@ -3587,14 +3640,16 @@ function solveIsoFrame(nodos, barras, cargas) {
     if (Ej.fx != null) eM.r[Ej.fx] += -dy;
     if (Ej.fy != null) eM.r[Ej.fy] += dx;
     // Cargas aplicadas SOBRE la barra
-    for (const cg of cargas.filter(x => x.elem === b.id)) {
+    for (const cg of cargas.filter(x => x.elem === b.id && loadTarget(x, nodos) === 'bar')) {
       if (cg.tipo === 'dist' || cg.tipo === 'dist_tri') {
         const qi = cg.qi ?? cg.q ?? 0, qj = cg.qj ?? cg.q ?? 0;
+        const t0 = cg.a ?? 0, t1 = cg.b ?? 1; // v1.5: tramo cargado (fracción de barra)
+        const span = Math.max(0, t1 - t0);
         const qavg = (qi + qj) / 2;
-        if (Math.abs(qavg) < 1e-12) continue;
-        const R = qavg * L; // >0 hacia abajo
-        const sc = (Math.abs(qi + qj) < 1e-12) ? L / 2 : L * (2 * qi + qj) / (3 * (qi + qj));
-        const px = a.x + (sc / L) * dx, py = a.y + (sc / L) * dy;
+        if (Math.abs(qavg) < 1e-12 || span < 1e-12) continue;
+        const R = qavg * span * L; // >0 hacia abajo
+        const tc = (Math.abs(qi + qj) < 1e-12) ? (t0 + t1) / 2 : t0 + span * (qi + 2 * qj) / (3 * (qi + qj)); // v1.5: centroide corregido
+        const px = a.x + tc * dx, py = a.y + tc * dy;
         eFy.b += R; // Fy+ arriba; la carga va hacia abajo → +R al pasar al RHS... (ver nota)
         eM.b += (px - a.x) * R; // momento de (0,-R): (px-ax)*(-R) con signo... (ver nota)
       } else if (cg.tipo === 'Fx' || cg.tipo === 'Fy') {
@@ -3622,7 +3677,7 @@ function solveIsoFrame(nodos, barras, cargas) {
         if (E.m != null) eM.r[E.m] -= 1;
       });
     }
-    for (const cg of cargas.filter(x => x.elem === nd.id)) {
+    for (const cg of cargas.filter(x => x.elem === nd.id && loadTarget(x, nodos) === 'node')) {
       if (cg.tipo === 'Fx' || cg.tipo === 'Fy') { eFx.b += -(cg.fx || 0); eFy.b += -(cg.fy || 0); }
       else if (cg.tipo === 'M') { eM.b += -(cg.m || 0); }
     }
@@ -3671,7 +3726,7 @@ function solveIsoFrame(nodos, barras, cargas) {
         if (E.m != null) rm -= val(E.m);
       });
     });
-    cargas.filter(cg => cg.elem === nd.id).forEach(cg => {
+    cargas.filter(cg => cg.elem === nd.id && loadTarget(cg, nodos) === 'node').forEach(cg => {
       if (cg.tipo === 'Fx' || cg.tipo === 'Fy') { rx += (cg.fx || 0); ry += (cg.fy || 0); }
       else if (cg.tipo === 'M') { rm += (cg.m || 0); }
     });
@@ -3681,27 +3736,129 @@ function solveIsoFrame(nodos, barras, cargas) {
   return { ok: true, maxRes, unknowns: unknowns.length, equations: NE, reactions, memberEnds, nodeChecks };
 }
 
-/* Ecuaciones V(s), M(s) por barra (s desde ni, 0..L), para carga transversal
-   uniforme o nula. dVds = intensidad transversal en +ŷ local (q>0 abajo). */
-function memberEquations(me, cargasBarra) {
-  let dVds = 0, hasPoint = false;
-  const co = Math.cos(me.th), si = Math.sin(me.th);
-  (cargasBarra || []).forEach(cg => {
-    if (cg.tipo === 'dist' || cg.tipo === 'dist_tri') {
-      const qi = cg.qi ?? cg.q ?? 0, qj = cg.qj ?? cg.q ?? 0;
-      const q = (qi + qj) / 2;
-      dVds += -q * co; // (0,-q)·ŷ ; ŷ=(-si,co)
-    } else if ((cg.tipo === 'Fx' || cg.tipo === 'Fy') && cg.pos != null) {
-      hasPoint = true;
+/* v1.5 — Fuerzas internas exactas por tramos.
+   V(s), M(s) con s en metros desde ni, para:
+   - distribuidas parciales (uniformes o triangulares) en [a,b] (fracción de barra),
+   - puntuales con posición, y pares concentrados con posición.
+   Convención: V+ en +ŷ local, M+ sagante (igual que dNi/dNj). */
+function internalForcesAt(me, cargasB, s){
+  const co=Math.cos(me.th), si=Math.sin(me.th);
+  const V0=me.dNi.V, M0=me.dNi.M;
+  let V=V0, M=M0+V0*s; // M(s)=M0+V0·s−Σ(momentos de las cargas respecto al corte)
+  const L=me.L;
+  for(const c of (cargasB||[])){
+    if(c.tipo==='dist'||c.tipo==='dist_tri'){
+      const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
+      const la=(c.a??0)*L, lb=(c.b??1)*L;
+      if(lb<=la+1e-12||s<=la+1e-12) continue;
+      const se=Math.min(s,lb), w=se-la; // tramo cargado hasta s
+      const k=(qj-qi)/Math.max(1e-12,(lb-la));
+      // q(u)=qi+k(u-la), q>0 hacia abajo; transversa: (0,-q)·ŷ=-q·co
+      const dV=(qi*w+k*w*w/2)*co;
+      const dM=((s-la)*(qi*w+k*w*w/2)-(qi*w*w/2+k*w*w*w/3))*co;
+      V-=dV; M-=dM;
+    } else if(c.tipo==='Fx'||c.tipo==='Fy'){
+      const sp=(c.pos??0.5)*L;
+      if(s>=sp-1e-9){
+        const fT=-(c.fx||0)*si+(c.fy||0)*co; // componente transversa (+ŷ)
+        V+=fT; M+=fT*(s-sp);
+      }
+    } else if(c.tipo==='M'){
+      const sp=(c.pos??0.5)*L;
+      if(s>=sp-1e-9) M-=(c.m||0); // par antihorario (+) produce salto −m en M(s)
     }
+  }
+  return {V,M};
+}
+
+/* Ecuaciones V(s), M(s) por barra (s desde ni, 0..L), por tramos.
+   Devuelve fronteras, raíces interiores de V=0 y ecuaciones por tramo. */
+function memberEquations(me, cargasBarra){
+  const L=me.L;
+  const bSet=new Set([0,L]);
+  (cargasBarra||[]).forEach(cg=>{
+    if(cg.tipo==='dist'||cg.tipo==='dist_tri'){ bSet.add((cg.a??0)*L); bSet.add((cg.b??1)*L); }
+    else if(cg.tipo==='Fx'||cg.tipo==='Fy'||cg.tipo==='M'){ if(cg.pos!=null) bSet.add(cg.pos*L); }
   });
-  const V0 = me.dNi.V, M0 = me.dNi.M;
-  const sStar = Math.abs(dVds) > 1e-12 ? -V0 / dVds : null;
-  const inRange = sStar != null && sStar > 1e-9 && sStar < me.L - 1e-9;
-  const Mat = s => M0 + V0 * s + dVds * s * s / 2;
-  const Mend = Mat(me.L);
-  const Mmax = inRange ? Mat(sStar) : Math.max(Math.abs(M0), Math.abs(Mend)) * 1;
-  return { V0, M0, dVds, hasPoint, sStar: inRange ? sStar : null, MmaxAbs: Math.abs(inRange ? Mat(sStar) : (Math.abs(M0) > Math.abs(Mend) ? M0 : Mend)), Mend, eqV: `V(s) = ${V0.toFixed(3)} + (${dVds.toFixed(3)})·s`, eqM: `M(s) = ${M0.toFixed(3)} + (${V0.toFixed(3)})·s + (${(dVds / 2).toFixed(3)})·s²` };
+  const bounds=[...bSet].filter(x=>x>=-1e-9&&x<=L+1e-9).map(x=>Math.min(L,Math.max(0,x))).sort((x,y)=>x-y);
+  const bb=[bounds[0]];
+  for(const x of bounds) if(x-bb[bb.length-1]>1e-7) bb.push(x);
+
+  const F=s=>internalForcesAt(me,cargasBarra,s);
+  // Raíces interiores de V(s)=0 (V es continua dentro de cada tramo)
+  const roots=[];
+  for(let i=0;i<bb.length-1;i++){
+    const sa=bb[i], sb=bb[i+1];
+    if(sb-sa<1e-9) continue;
+    const NS=60;
+    let s0=sa, v0=F(sa).V;
+    for(let k=1;k<=NS;k++){
+      const s=sa+(sb-sa)*k/NS, v=F(s).V;
+      if(Math.abs(v0)<1e-12) roots.push(s0);
+      if(v*v0<0){
+        let a2=s0,b2=s,fa=v0;
+        for(let it=0;it<40;it++){ const m2=(a2+b2)/2,fm=F(m2).V; if(fa*fm<=0) b2=m2; else {a2=m2;fa=fm;} }
+        roots.push((a2+b2)/2);
+      }
+      s0=s; v0=v;
+    }
+  }
+  let sStar=null, bestM=-1;
+  for(const r of roots){
+    if(r<1e-9||r>L-1e-9) continue;
+    const m=Math.abs(F(r).M);
+    if(m>bestM){ bestM=m; sStar=r; }
+  }
+
+  // Ecuaciones por tramo: acumulación analítica de coeficientes
+  const co=Math.cos(me.th), si=Math.sin(me.th);
+  const V0=me.dNi.V, M0=me.dNi.M;
+  const fmt=n=>{ const v=Math.abs(n)<5e-9?0:n; return v.toFixed(3); };
+  const polyV=[], polyM=[];
+  for(let i=0;i<bb.length-1;i++){
+    const sa=bb[i], sb=bb[i+1];
+    if(sb-sa<1e-9) continue;
+    let v0=V0,v1=0,v2=0, m0=M0,m1=V0,m2=0,m3=0;
+    for(const c of (cargasBarra||[])){
+      if(c.tipo==='dist'||c.tipo==='dist_tri'){
+        const qi=(c.qi??c.q??0)*co, qj=(c.qj??c.q??0)*co; // intensidad transversa
+        const la=(c.a??0)*L, lb=(c.b??1)*L, w=lb-la;
+        if(w<1e-12) continue;
+        const k=(qj-qi)/w;
+        if(sa>=lb-1e-9){ // carga toda a la izquierda: resultante
+          const R=(qi+qj)/2*w;
+          const cc=(Math.abs(qi+qj)<1e-12)?(la+lb)/2:la+w*(qi+2*qj)/(3*(qi+qj)); // centroide v1.5
+          v0-=R; m1-=R; m0+=R*cc;
+        } else if(sa>=la-1e-9){ // tramo dentro de la carga
+          v2-=k/2; v1+=(k*la-qi); v0+=(qi*la-k*la*la/2);
+          m3-=k/6; m2+=(k*la-qi)/2; m1+=(qi*la-k*la*la/2); m0-=(qi*la*la/2-k*la*la*la/6);
+        }
+      } else if(c.tipo==='Fx'||c.tipo==='Fy'){
+        const sp=(c.pos??0.5)*L;
+        if(sa>=sp-1e-9){
+          const fT=-(c.fx||0)*si+(c.fy||0)*co;
+          v0+=fT; m1+=fT; m0-=fT*sp;
+        }
+      } else if(c.tipo==='M'){
+        const sp=(c.pos??0.5)*L;
+        if(sa>=sp-1e-9) m0-=(c.m||0);
+      }
+    }
+    const seg=`s∈[${sa.toFixed(2)},${sb.toFixed(2)}]`;
+    const sv=`V(s) = ${fmt(v0)}${v1<0?'−':'+'}${fmt(Math.abs(v1))}·s${Math.abs(v2)>5e-9?(v2<0?'−':'+')+fmt(Math.abs(v2))+'·s²':''}  [${seg}]`;
+    const sm=`M(s) = ${fmt(m0)}${m1<0?'−':'+'}${fmt(Math.abs(m1))}·s${Math.abs(m2)>5e-9?(m2<0?'−':'+')+fmt(Math.abs(m2))+'·s²':''}${Math.abs(m3)>5e-9?(m3<0?'−':'+')+fmt(Math.abs(m3))+'·s³':''}  [${seg}]`;
+    polyV.push(sv.replace('+−','−').replace('−−','+'));
+    polyM.push(sm.replace('+−','−').replace('−−','+'));
+  }
+  const hasPoint=(cargasBarra||[]).some(c=>(c.tipo==='Fx'||c.tipo==='Fy'||c.tipo==='M'));
+  // MmaxAbs: máximo |M| sobre muestreo fino (para el rótulo del despiece)
+  let MmaxAbs=0;
+  const grid=new Set(bb);
+  for(let i=1;i<40;i++) grid.add(i/40*L);
+  if(sStar!=null) grid.add(sStar);
+  for(const s of grid){ const m=Math.abs(F(s).M); if(m>MmaxAbs) MmaxAbs=m; }
+  return { V0, M0, bounds:bb, sStar, hasPoint, MmaxAbs,
+    eqV: polyV.join('  |  '), eqM: polyM.join('  |  ') };
 }
 
 
@@ -3832,19 +3989,19 @@ function despieceHTML(isoRes){
   let h='<div class="eq-box" style="margin-bottom:8px;font-size:10px;line-height:1.7">'
     +'<span class="eq-label">Convenciones:</span> N + tracción · V + según dM/dx con M + = sonrisa (cóncavo arriba en vigas) · s medido desde el primer nudo.</div>';
   isoRes.memberEnds.forEach(me=>{
-    const cargasB=AppState.cargas.filter(c=>c.elem===me.barId);
+    const cargasB=AppState.cargas.filter(c=>c.elem===me.barId&&loadTarget(c)==='bar');
     const eq=memberEquations(me,cargasB);
     h+='<div class="eq-box" style="margin-bottom:8px">'
       +`<span class="eq-label">Barra ${barName(me.barId)}</span> <span class="eq-comment">(L = ${R(me.L)} m)</span><br>`
       +'<table class="result-table"><tr><th></th><th>N (kN)</th><th>V (kN)</th><th>M (kN·m)</th></tr>'
       +`<tr><td>Extremo ${nm(AppState.barras.find(x=>x.id===me.barId).ni)} (s=0)</td><td class="val">${R(me.dNi.N)}</td><td class="val">${R(me.dNi.V)}</td><td class="val">${R(me.dNi.M)}</td></tr>`
       +`<tr><td>Extremo ${nm(AppState.barras.find(x=>x.id===me.barId).nj)} (s=L)</td><td class="val">${R(me.dNj.N)}</td><td class="val">${R(me.dNj.V)}</td><td class="val">${R(me.dNj.M)}</td></tr></table>`
-      +`<span class="eq-label">V(s) = </span><span class="eq-comment">${R(eq.V0)} + (${R(eq.dVds)})·s</span><br>`
-      +`<span class="eq-label">M(s) = </span><span class="eq-comment">${R(eq.M0)} + (${R(eq.V0)})·s + (${R(eq.dVds/2)})·s²</span><br>`
+      +`<span class="eq-label">V(s):</span> <span class="eq-comment">${eq.eqV}</span><br>`
+      +`<span class="eq-label">M(s):</span> <span class="eq-comment">${eq.eqM}</span><br>`
       +(eq.sStar!=null
         ? `<span class="eq-result">M máx = ${R(eq.MmaxAbs)} kN·m en s = ${R(eq.sStar)} m</span>`
         : `<span class="eq-comment">M máx en extremo: ${R(eq.MmaxAbs)} kN·m</span>`)
-      +(eq.hasPoint?'<br><span class="eq-comment">Con cargas puntuales intermedias: ecuaciones por tramos.</span>':'')
+      +(eq.hasPoint?'<br><span class="eq-comment">Con cargas puntuales o pares intermedios: ecuaciones por tramos.</span>':'')
       +'</div>';
   });
   h+='<span class="eq-label">Verificación por nudo</span> <span class="eq-comment">(ΣF = 0, ΣM = 0)</span>'
