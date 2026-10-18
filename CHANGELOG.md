@@ -1,5 +1,26 @@
 # Changelog — StructSolver I
 
+## v1.6.0 — Octubre 2026 (cargas distribuidas con dirección)
+### Agregado
+- **Dirección configurable en distribuidas:** las cargas uniforme y triangular
+  aceptan dirección: Vertical (defecto), Horizontal, Perpendicular a la barra
+  o Ángulo personalizado (grados antihorario desde +x). Nueva función
+  `dirVector` como única fuente de verdad; el solucionador descompone la
+  resultante en (Fx,Fy) con brazos cruzados; `internalForcesAt` y
+  `memberEquations` usan la componente transversa (d·ŷ) y axial (d·x̂);
+  el dibujo traza las flechas en la dirección elegida. Permite modelar W1
+  (horizontal sobre barra inclinada) y W3 (triangular horizontal sobre
+  columna) sin discretizar en puntuales. Verificado: mismas reacciones que
+  la discretización (A:91,42,429; H:-86,84).
+- Caché del service worker: `structsolver-v152` → `structsolver-v160`.
+
+## v1.5.2 — Octubre 2026 (renombre de rótula)
+### Cambiado
+- **"Rótula interna" → "Rótula extrema":** en leyenda, menú contextual,
+  tabla de barras y mensajes. El nombre anterior confundía (parecía dentro
+  de la barra); el nuevo alude a que va en un extremo.
+- Caché del service worker: `structsolver-v151` → `structsolver-v152`.
+
 ## v1.5.1 — Octubre 2026 (tramo de distribuida por coordenada X)
 ### Agregado
 - **Modo de tramo por coordenada X:** en las cargas distribuidas (uniforme y

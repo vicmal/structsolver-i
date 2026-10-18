@@ -770,7 +770,7 @@ body {
       <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red)"></div>Compresión (C)</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted)"></div>Fuerza cero</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--accent-green)"></div>Reacciones</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--accent-yellow)"></div>Rótula interna ⊣⊢</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent-yellow)"></div>Rótula extrema ⊣⊢</div>
     </div>
   </div>
 
@@ -824,7 +824,7 @@ body {
   <div class="ctx-item" id="ctx-force"   onclick="ctxAction('force')">↗ Aplicar fuerza puntual</div>
   <div class="ctx-item" id="ctx-moment"  onclick="ctxAction('moment')">↻ Aplicar momento</div>
   <div class="ctx-item" id="ctx-dist"    onclick="ctxAction('dist')">▦ Carga distribuida</div>
-  <div class="ctx-item" id="ctx-hinge"   onclick="ctxAction('hinge')">⊣⊢ Insertar / quitar rótula interna</div>
+  <div class="ctx-item" id="ctx-hinge"   onclick="ctxAction('hinge')">⊣⊢ Insertar / quitar rótula extrema</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item danger"           onclick="ctxAction('delete')">🗑 Eliminar</div>
 </div>
@@ -967,6 +967,27 @@ function xToFrac(barId,x){
   if(Math.abs(dx)<1e-9) return null;
   const t=(x-ni.x)/dx;
   return Math.min(1,Math.max(0,t));
+}
+// v1.6.0: vector unitario de dirección de una carga distribuida.
+// ÚNICA fuente de verdad para descomponer (solucionador, internas, dibujo).
+// dir: 'vertical' (defecto) | 'horizontal' | 'perp' | 'angle' (grados antihorario desde +x).
+// Retorna {dx,dy} tal que la fuerza por unidad de longitud es q(s)·(dx,dy).
+function dirVector(c,b){
+  const dir=c.dir||'vertical';
+  if(dir==='horizontal') return {dx:1,dy:0};
+  if(dir==='angle'){
+    const a=(c.ang||0)*Math.PI/180;
+    return {dx:Math.cos(a),dy:Math.sin(a)};
+  }
+  if(dir==='perp'){
+    const ni=AppState.nodos.find(n=>n.id===b.ni);
+    const nj=AppState.nodos.find(n=>n.id===b.nj);
+    if(!ni||!nj) return {dx:0,dy:-1};
+    const L=Math.hypot(nj.x-ni.x,nj.y-ni.y)||1;
+    const th=Math.atan2(nj.y-ni.y,nj.x-ni.x);
+    return {dx:-Math.sin(th),dy:Math.cos(th)}; // ŷ local
+  }
+  return {dx:0,dy:-1}; // vertical: q>0 hacia abajo
 }
 
 function renderCanvas(){
@@ -1204,7 +1225,7 @@ function drawBar(b){
   g.addEventListener('contextmenu',e=>onContextMenu(e,'bar',b.id));
 
   if(b.hinge){
-    // Barra con rótula interna: dibujar dos segmentos con símbolo ⊣⊢ en el centro
+    // Barra con rótula extrema: dibujar dos segmentos con símbolo ⊣⊢ en el centro
     const mx=(x1+x2)/2, my=(y1+y2)/2;
     const dx=x2-x1, dy=y2-y1;
     const len=Math.sqrt(dx*dx+dy*dy)||1;
@@ -1327,11 +1348,11 @@ function drawLoad(c){
   } else if(c.tipo==='dist'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b);
+    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b,c);
   } else if(c.tipo==='dist_tri'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b);
+    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b,c);
   }
 }
 
@@ -1377,29 +1398,37 @@ function drawMoment(sx,sy,val,color){
   svgText(sx,sy-r-10,`M=${R(val)}`,color,10,'middle');
 }
 
-function drawDistLoad(b,qi,qj,tipo,la,lb){
+function drawDistLoad(b,qi,qj,tipo,la,lb,c){
   const ni=AppState.nodos.find(n=>n.id===b.ni);
   const nj=AppState.nodos.find(n=>n.id===b.nj);
   if(!ni||!nj) return;
   la=(la==null?0:la); lb=(lb==null?1:lb);
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
+  // v1.6.0: dirección de las flechas según dirVector (pantalla: y invertida).
+  const dv=c?dirVector(c,b):{dx:0,dy:-1};
+  const sdx=dv.dx, sdy=-dv.dy;
   const n=8;
   const scaleArrow=30;
   const qAbs=Math.abs(qi)+Math.abs(qj)+0.001;
   const alen=t=>Math.min(40,Math.abs(qi+(qj-qi)*t)*scaleArrow/qAbs);
+  // signo: q>0 va en +d; q<0 invierte
+  const sgn=t=>((qi+(qj-qi)*t)<0?-1:1);
   for(let i=0;i<=n;i++){
     const t=i/n;
     const u=la+(lb-la)*t;
     const bx=x1+(x2-x1)*u;
     const by=y1+(y2-y1)*u;
-    svgLine(bx,by,bx,by-alen(t),'#ff7b3d',1.5);
+    const L=alen(t)*sgn(t);
+    svgLine(bx,by,bx+sdx*L,by+sdy*L,'#ff7b3d',1.5);
   }
-  // Línea superior (solo el tramo cargado)
+  // Línea superior (solo el tramo cargado): une las puntas
   const xa=x1+(x2-x1)*la, ya=y1+(y2-y1)*la;
   const xb=x1+(x2-x1)*lb, yb=y1+(y2-y1)*lb;
-  svgLine(xa,ya-alen(0),xb,yb-alen(1),'#ff7b3d',1.5);
-  svgText((xa+xb)/2,(ya+yb)/2-alen(0)-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}`,
+  const L0=alen(0)*sgn(0), L1=alen(1)*sgn(1);
+  svgLine(xa+sdx*L0,ya+sdy*L0,xb+sdx*L1,yb+sdy*L1,'#ff7b3d',1.5);
+  const dirLbl=c&&c.dir&&c.dir!=='vertical'?({horizontal:' ←→',perp:' ⟂',angle:' ∠'+(c.ang||0)+'°'}[c.dir]||''):'';
+  svgText((xa+xb)/2+sdx*L0,(ya+yb)/2+sdy*L0-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}${dirLbl}`,
           '#ff7b3d',10,'middle');
 }
 
@@ -1597,7 +1626,7 @@ function onContextMenu(e,type,id){
   if(type==='bar'){
     const b=AppState.barras.find(ba=>ba.id===id);
     document.getElementById('ctx-hinge').textContent=
-      b&&b.hinge ? '⊣⊢ Quitar rótula interna' : '⊣⊢ Insertar rótula interna';
+      b&&b.hinge ? '⊣⊢ Quitar rótula extrema' : '⊣⊢ Insertar rótula extrema';
   }
   menu.style.display='block';
   renderCanvas();
@@ -1665,6 +1694,15 @@ function ctxAction(action){
        </div>
        <div class="modal-row"><label>q inicial (${unitLabel()}/m)</label><input id="m-qi" type="number" step="0.5" value="5"></div>
        <div class="modal-row"><label>q final (solo triangular)</label><input id="m-qj" type="number" step="0.5" value="0"></div>
+       <div class="modal-row"><label>Dirección</label>
+        <select id="m-qdir" onchange="document.getElementById('m-qang-row').style.display=this.value==='angle'?'block':'none';">
+          <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
+          <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
+          <option value="perp">Perpendicular a la barra</option>
+          <option value="angle">Ángulo personalizado</option>
+        </select>
+       </div>
+       <div class="modal-row" id="m-qang-row" style="display:none"><label>Ángulo (° antihorario desde +x)</label><input id="m-qang" type="number" step="1" value="0"></div>
        <div class="modal-row"><label>Modo de tramo</label>
         <select id="m-qmode" onchange="document.getElementById('m-qfrac').style.display=this.value==='frac'?'block':'none';document.getElementById('m-qx').style.display=this.value==='x'?'block':'none';">
           <option value="frac">Fracción de barra (0–1)</option>
@@ -1695,7 +1733,9 @@ function ctxAction(action){
           qb=clamp01(+document.getElementById('m-qb').value||1);
         }
         if(qb<=qa) qb=1;
-        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'bar',tipo,q:qi,qi,qj,a:qa,b:qb});
+        const qdir=document.getElementById('m-qdir').value;
+        const qang=qdir==='angle'?(+document.getElementById('m-qang').value||0):0;
+        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'bar',tipo,q:qi,qi,qj,a:qa,b:qb,dir:qdir,ang:qang});
         updateTables(); renderCanvas(); updateStatusBar();
       });
   }
@@ -1809,7 +1849,7 @@ function updateTables(){
       <td style="font-family:var(--font-mono)">${L}</td>
       <td style="font-family:var(--font-mono)">${ang}°</td>
       <td style="text-align:center">
-        <input type="checkbox" title="Rótula interna" ${b.hinge?'checked':''}
+        <input type="checkbox" title="Rótula extrema" ${b.hinge?'checked':''}
           onchange="toggleHinge(${b.id},this.checked)"
           style="accent-color:var(--accent-yellow);cursor:pointer;width:14px;height:14px">
         ${b.hinge?`<br><select title="Extremo de la rótula" onchange="setHingeEnd(${b.id},this.value)" style="font-size:10px;max-width:64px">
@@ -1842,12 +1882,14 @@ function updateTables(){
     } else if(c.tipo==='dist'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      val=`q=${c.q}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
+      const dl=c.dir&&c.dir!=='vertical'?({horizontal:' horiz.',perp:' perp.',angle:' ang.'+(c.ang||0)+'°'}[c.dir]||''):'';
+      val=`q=${c.q}${dl}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Dist.';
     } else if(c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      val=`qi=${c.qi}→qj=${c.qj}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
+      const dl=c.dir&&c.dir!=='vertical'?({horizontal:' horiz.',perp:' perp.',angle:' ang.'+(c.ang||0)+'°'}[c.dir]||''):'';
+      val=`qi=${c.qi}→qj=${c.qj}${dl}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Tri.';
     }
     tr.innerHTML=`<td>${elem}</td><td>${tipo}</td><td colspan="2" style="font-size:10px;font-family:var(--font-mono)">${val}</td><td><button class="btn-del" onclick="deleteLoad(${c.id})">×</button></td>`;
@@ -1940,6 +1982,17 @@ function addLoadForm(){
        <div class="modal-row"><label>q inicial</label><input id="m-lqi" type="number" step="0.5" value="5"></div>
        <div class="modal-row"><label>q final</label><input id="m-lqj" type="number" step="0.5" value="0"></div>
      </div>
+     <div id="lf-dir" style="display:none">
+       <div class="modal-row"><label>Dirección</label>
+         <select id="m-ldir" onchange="document.getElementById('m-lang-row').style.display=this.value==='angle'?'block':'none';">
+           <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
+           <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
+           <option value="perp">Perpendicular a la barra</option>
+           <option value="angle">Ángulo personalizado</option>
+         </select>
+       </div>
+       <div class="modal-row" id="m-lang-row" style="display:none"><label>Ángulo (° antihorario desde +x)</label><input id="m-lang" type="number" step="1" value="0"></div>
+     </div>
      <div id="lf-pos" style="display:none">
        <div class="modal-row"><label>Posición en la barra (0=ini, 1=fin)</label><input id="m-lpos" type="number" step="0.05" min="0" max="1" value="0.5"></div>
      </div>
@@ -1982,8 +2035,8 @@ function addLoadForm(){
       }
       if(tipo==='Fx'){ c.fx=+document.getElementById('m-lfx').value; c.fy=+document.getElementById('m-lfy').value; if(!isNode) c.pos=clamp01(+document.getElementById('m-lpos').value||0.5); }
       else if(tipo==='M'){ c.m=+document.getElementById('m-lm').value; if(!isNode) c.pos=clamp01(+document.getElementById('m-lpos').value||0.5); }
-      else if(tipo==='dist'){ c.q=+document.getElementById('m-lq').value; c.qi=c.q; c.qj=c.q; c.a=_qa; c.b=_qb; }
-      else if(tipo==='dist_tri'){ c.qi=+document.getElementById('m-lqi').value; c.qj=+document.getElementById('m-lqj').value; c.q=c.qi; c.a=_qa; c.b=_qb; }
+      else if(tipo==='dist'){ c.q=+document.getElementById('m-lq').value; c.qi=c.q; c.qj=c.q; c.a=_qa; c.b=_qb; c.dir=document.getElementById('m-ldir').value; c.ang=c.dir==='angle'?(+document.getElementById('m-lang').value||0):0; }
+      else if(tipo==='dist_tri'){ c.qi=+document.getElementById('m-lqi').value; c.qj=+document.getElementById('m-lqj').value; c.q=c.qi; c.a=_qa; c.b=_qb; c.dir=document.getElementById('m-ldir').value; c.ang=c.dir==='angle'?(+document.getElementById('m-lang').value||0):0; }
       AppState.cargas.push(c);
       updateTables(); renderCanvas(); updateStatusBar();
     });
@@ -1998,6 +2051,7 @@ function toggleLoadFields(){
   document.getElementById('lf-tri').style.display=v==='dist_tri'?'block':'none';
   document.getElementById('lf-pos').style.display=((v==='Fx'||v==='M')&&isBar)?'block':'none';
   document.getElementById('lf-range').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
+  document.getElementById('lf-dir').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
   // v1.5.1: pre-llenar X y deshabilitar modo X en barras verticales
   if((v==='dist'||v==='dist_tri')&&isBar){
     const bid=+sel.slice(1);
@@ -2201,7 +2255,7 @@ function calcEstabilidad(){
   // E = 3N + Ec       (ecuaciones de equilibrio + condiciones de continuidad)
   //   B  = barras (miembros)
   //   N  = nodos
-  //   Ec = ecuaciones adicionales por rótulas internas (h condiciones M=0)
+  //   Ec = ecuaciones adicionales por rótulas extremas (h condiciones M=0)
   const B  = m;
   const N  = n;
   const Ec = h;
@@ -2261,12 +2315,12 @@ function calcEstabilidad(){
       pasos.push('&nbsp;&nbsp;• Agregar <strong>'+falta+' barra(s)</strong> en zonas sin triangulación.');
       if(falta>=2) pasos.push('&nbsp;&nbsp;• Agregar <strong>1 articulado fijo</strong> (aporta 2 reacciones).');
       pasos.push('&nbsp;&nbsp;• Agregar <strong>1 rodillo</strong> por cada grado faltante (1 reacción c/u).');
-      if(h>0) pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+Math.min(h,falta)+' rótula(s) interna(s)</strong>.');
+      if(h>0) pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+Math.min(h,falta)+' rótula(s) extrema(s)</strong>.');
     } else if(f>0){
       pasos.push('<strong>Sobran '+f+' vínculo(s). Opciones:</strong>');
       pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+f+' barra(s)</strong> redundantes.');
       pasos.push('&nbsp;&nbsp;• Reemplazar empotrado por articulado (libera 1 grado).');
-      pasos.push('&nbsp;&nbsp;• Insertar <strong>'+f+' rótula(s) interna(s) ⊣⊢</strong>.');
+      pasos.push('&nbsp;&nbsp;• Insertar <strong>'+f+' rótula(s) extrema(s) ⊣⊢</strong>.');
     }
     if(!geoOk&&f===0){
       pasos.push('<strong>Reubicación necesaria:</strong>');
@@ -2318,7 +2372,7 @@ function calcEstabilidad(){
       +'<span class="eq-label">Nudos:</span> '+n+' &nbsp;|&nbsp;'
       +'<span class="eq-label">Barras:</span> '+m+' &nbsp;|&nbsp;'
       +'<span class="eq-label">Reacciones:</span> '+r+'<br>'
-      +(h>0?'<span class="eq-label">h =</span> '+h+' rótulas internas ⊣⊢<br>':'')
+      +(h>0?'<span class="eq-label">h =</span> '+h+' rótulas extremas ⊣⊢<br>':'')
       +'<span class="eq-label">Nodos libres:</span> '+nodosLibresStr+'<br>'
       +'<span class="eq-label">Vínculos externos:</span> '+apoyosStr
     +'</div>'
@@ -2749,7 +2803,7 @@ function calcSecciones(){
 
 // ── Módulo 5: Pórtico ──
 function calcPortico(){
-  // v1.4.2: solucionador isostático por despiece (maneja rótulas internas)
+  // v1.4.2: solucionador isostático por despiece (maneja rótulas extremas)
   const iso=solveIsoFrame(AppState.nodos, AppState.barras, AppState.cargas);
   let rxCalc, isoRes=null;
   if(iso.ok){
@@ -2783,8 +2837,8 @@ function calcPortico(){
       });
       const pts=[...tSet].sort((a,z)=>a-z).map(t=>{
         const s=t*me.L;
-        const {V,M}=internalForcesAt(me,cargasB,s); // v1.5: exacto por tramos
-        return {t,v:R(V),m:R(M),n:R(me.dNi.N)};
+        const {V,M,N}=internalForcesAt(me,cargasB,s); // v1.5: exacto por tramos; v1.6: N(s) con axial
+        return {t,v:R(V),m:R(M),n:R(N)};
       });
       diagramas.push({ni:b.ni,nj:b.nj,barId:me.barId,points:pts,L:me.L,
         Vmax:Math.max(...pts.map(p=>Math.abs(p.v))),
@@ -2911,7 +2965,7 @@ function calculate(){
 // ══════════════════════════════════════════════════════════
 const EJEMPLOS={
   1:()=>{
-    // Pórtico tipo asignación 1er corte — con rótula interna entre C y F
+    // Pórtico tipo asignación 1er corte — con rótula extrema entre C y F
     clearAllSilent();
     // Nodos nivel inferior
     addN('A',0,0,'fixed');
@@ -2932,7 +2986,7 @@ const EJEMPLOS={
     addB('B','J','frame'); addB('J','H','frame');
     // Miembros nivel superior con RÓTULA interna entre E y F
     addB('C','E','frame'); addB('E','F','frame'); addB('F','G','frame');
-    // Marcar rótula interna en barra EF
+    // Marcar rótula extrema en barra EF
     const bEF=AppState.barras[AppState.barras.length-2];
     if(bEF) bEF.hinge=true;
     // Miembros diagonales techo
@@ -3384,7 +3438,7 @@ function exportPDF(){
     tblRow(['Nodos totales (n)', n],[70,110]);
     tblRow(['Barras / miembros (m)', m],[70,110]);
     tblRow(['Reacciones externas (r)', r],[70,110]);
-    tblRow(['Rótulas internas (h)', h+(h>0?' (rot.)':'')],[70,110]);
+    tblRow(['Rótulas extremas (h)', h+(h>0?' (rot.)':'')],[70,110]);
     tblRow(['Nodos libres', nodosLibres],[70,110]);
     y+=2;
     line('Vínculos externos:',0,true);
@@ -3466,12 +3520,12 @@ function exportPDF(){
         line('• Agregar '+falta+' barra(s) en zonas sin triangulación.',4);
         if(falta>=2) line('• Agregar 1 articulado fijo (aporta 2 reacciones simultáneas).',4);
         line('• Agregar 1 rodillo por cada grado faltante (1 reacción c/u).',4);
-        if(h>0) line('• Eliminar '+Math.min(h,falta)+' rótula(s) interna(s) existente(s).',4);
+        if(h>0) line('• Eliminar '+Math.min(h,falta)+' rótula(s) extrema(s) existente(s).',4);
       } else if(f>0){
         line('Sobran '+f+' vínculo(s). Opciones:',0,true);
         line('• Eliminar '+f+' barra(s) redundantes.',4);
         line('• Reemplazar apoyo empotrado por articulado (libera 1 grado).',4);
-        line('• Insertar '+f+' rótula(s) interna(s) ⊣⊢ en miembros existentes.',4);
+        line('• Insertar '+f+' rótula(s) extrema(s) ⊣⊢ en miembros existentes.',4);
       }
       if(!geoOk && f===0){
         line('Reubicación necesaria:',0,true);
@@ -3736,11 +3790,14 @@ function solveIsoFrame(nodos, barras, cargas) {
         const span = Math.max(0, t1 - t0);
         const qavg = (qi + qj) / 2;
         if (Math.abs(qavg) < 1e-12 || span < 1e-12) continue;
-        const R = qavg * span * L; // >0 hacia abajo
+        // v1.6.0: resultante descompuesta según dirección (dirVector).
+        const dv = dirVector(cg, b);
+        const Rmod = qavg * span * L; // módulo con signo de q
+        const Rfx = Rmod * dv.dx, Rfy = Rmod * dv.dy;
         const tc = (Math.abs(qi + qj) < 1e-12) ? (t0 + t1) / 2 : t0 + span * (qi + 2 * qj) / (3 * (qi + qj)); // v1.5: centroide corregido
         const px = a.x + tc * dx, py = a.y + tc * dy;
-        eFy.b += R; // Fy+ arriba; la carga va hacia abajo → +R al pasar al RHS... (ver nota)
-        eM.b += (px - a.x) * R; // momento de (0,-R): (px-ax)*(-R) con signo... (ver nota)
+        eFx.b += -Rfx; eFy.b += -Rfy;
+        eM.b += -((px - a.x) * Rfy - (py - a.y) * Rfx); // brazos cruzados, +antihorario
       } else if (cg.tipo === 'Fx' || cg.tipo === 'Fy') {
         const t = cg.pos ?? 0.5;
         const px = a.x + t * dx, py = a.y + t * dy;
@@ -3832,9 +3889,10 @@ function solveIsoFrame(nodos, barras, cargas) {
    Convención: V+ en +ŷ local, M+ sagante (igual que dNi/dNj). */
 function internalForcesAt(me, cargasB, s){
   const co=Math.cos(me.th), si=Math.sin(me.th);
-  const V0=me.dNi.V, M0=me.dNi.M;
-  let V=V0, M=M0+V0*s; // M(s)=M0+V0·s−Σ(momentos de las cargas respecto al corte)
+  const V0=me.dNi.V, M0=me.dNi.M, N0=me.dNi.N;
+  let V=V0, M=M0+V0*s, N=N0; // M(s)=M0+V0·s−Σ(momentos de las cargas respecto al corte)
   const L=me.L;
+  const _bar=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
   for(const c of (cargasB||[])){
     if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
@@ -3842,22 +3900,27 @@ function internalForcesAt(me, cargasB, s){
       if(lb<=la+1e-12||s<=la+1e-12) continue;
       const se=Math.min(s,lb), w=se-la; // tramo cargado hasta s
       const k=(qj-qi)/Math.max(1e-12,(lb-la));
-      // q(u)=qi+k(u-la), q>0 hacia abajo; transversa: (0,-q)·ŷ=-q·co
-      const dV=(qi*w+k*w*w/2)*co;
-      const dM=((s-la)*(qi*w+k*w*w/2)-(qi*w*w/2+k*w*w*w/3))*co;
-      V-=dV; M-=dM;
+      // v1.6.0: dirección general. tF = d·ŷ (transversa), aF = d·x̂ (axial).
+      const dv=_bar?dirVector(c,_bar):{dx:0,dy:-1};
+      const tF=dv.dx*(-si)+dv.dy*co;
+      const aF=dv.dx*co+dv.dy*si;
+      const qT_w=(qi*w+k*w*w/2)*tF; // resultante transversa hasta s
+      const qA_w=(qi*w+k*w*w/2)*aF; // resultante axial hasta s
+      const dM=((s-la)*(qi*w+k*w*w/2)-(qi*w*w/2+k*w*w*w/3));
+      V+=qT_w; M+=dM*tF; N+=qA_w;
     } else if(c.tipo==='Fx'||c.tipo==='Fy'){
       const sp=(c.pos??0.5)*L;
       if(s>=sp-1e-9){
         const fT=-(c.fx||0)*si+(c.fy||0)*co; // componente transversa (+ŷ)
-        V+=fT; M+=fT*(s-sp);
+        const fA=(c.fx||0)*co+(c.fy||0)*si;  // componente axial (+x̂)
+        V+=fT; M+=fT*(s-sp); N+=fA;
       }
     } else if(c.tipo==='M'){
       const sp=(c.pos??0.5)*L;
       if(s>=sp-1e-9) M-=(c.m||0); // par antihorario (+) produce salto −m en M(s)
     }
   }
-  return {V,M};
+  return {V,M,N};
 }
 
 /* Ecuaciones V(s), M(s) por barra (s desde ni, 0..L), por tramos.
@@ -3902,6 +3965,7 @@ function memberEquations(me, cargasBarra){
   // Ecuaciones por tramo: acumulación analítica de coeficientes
   const co=Math.cos(me.th), si=Math.sin(me.th);
   const V0=me.dNi.V, M0=me.dNi.M;
+  const _bar2=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
   const fmt=n=>{ const v=Math.abs(n)<5e-9?0:n; return v.toFixed(3); };
   const polyV=[], polyM=[];
   for(let i=0;i<bb.length-1;i++){
@@ -3910,7 +3974,11 @@ function memberEquations(me, cargasBarra){
     let v0=V0,v1=0,v2=0, m0=M0,m1=V0,m2=0,m3=0;
     for(const c of (cargasBarra||[])){
       if(c.tipo==='dist'||c.tipo==='dist_tri'){
-        const qi=(c.qi??c.q??0)*co, qj=(c.qj??c.q??0)*co; // intensidad transversa
+        // v1.6.0: factor transverso general tF = d·ŷ. El polinomio usa (−tF)
+        // para conservar el patrón de signos (v0−=R, etc.).
+        const dv=_bar2?dirVector(c,_bar2):{dx:0,dy:-1};
+        const tF=dv.dx*(-si)+dv.dy*co;
+        const qi=(c.qi??c.q??0)*(-tF), qj=(c.qj??c.q??0)*(-tF); // intensidad transversa
         const la=(c.a??0)*L, lb=(c.b??1)*L, w=lb-la;
         if(w<1e-12) continue;
         const k=(qj-qi)/w;
