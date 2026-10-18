@@ -1,5 +1,9 @@
 # StructSolver I — Análisis Estructural Estático
 
+> **v1.5.2** — Cargas distribuidas con dirección vertical, horizontal,
+> perpendicular a la barra o con ángulo personalizado; componentes globales y
+> locales completas en reacciones, despiece y diagramas.
+> **v1.5.1** — Tramo distribuido por coordenada X global.
 > **v1.5.0** — Cargas puntuales y pares con posición; distribuidas parciales
 > (uniforme/triangular con Desde/Hasta); centroide triangular corregido;
 > diagramas V/M exactos por tramos.

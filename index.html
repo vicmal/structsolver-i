@@ -770,7 +770,7 @@ body {
       <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red)"></div>Compresión (C)</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--text-muted)"></div>Fuerza cero</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--accent-green)"></div>Reacciones</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--accent-yellow)"></div>Rótula extrema ⊣⊢</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent-yellow)"></div>Rótula interna ⊣⊢</div>
     </div>
   </div>
 
@@ -824,7 +824,7 @@ body {
   <div class="ctx-item" id="ctx-force"   onclick="ctxAction('force')">↗ Aplicar fuerza puntual</div>
   <div class="ctx-item" id="ctx-moment"  onclick="ctxAction('moment')">↻ Aplicar momento</div>
   <div class="ctx-item" id="ctx-dist"    onclick="ctxAction('dist')">▦ Carga distribuida</div>
-  <div class="ctx-item" id="ctx-hinge"   onclick="ctxAction('hinge')">⊣⊢ Insertar / quitar rótula extrema</div>
+  <div class="ctx-item" id="ctx-hinge"   onclick="ctxAction('hinge')">⊣⊢ Insertar / quitar rótula interna</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item danger"           onclick="ctxAction('delete')">🗑 Eliminar</div>
 </div>
@@ -955,6 +955,66 @@ function getBarAngle(b){
   if(!ni||!nj) return 0;
   return Math.atan2(nj.y-ni.y,nj.x-ni.x)*180/Math.PI;
 }
+// Única fuente de verdad para la dirección positiva de una carga distribuida.
+// El valor escalar q conserva su signo: q<0 invierte automáticamente el vector.
+function loadDirection(c,b,nodos){
+  nodos=nodos||AppState.nodos;
+  const dir=c&&c.dir||'vertical';
+  if(dir==='horizontal') return {x:1,y:0};
+  if(dir==='angle'){
+    const a=(Number.isFinite(+c.ang)?+c.ang:0)*Math.PI/180;
+    return {x:Math.cos(a),y:Math.sin(a)};
+  }
+  if(dir==='perp'){
+    const ni=nodos.find(n=>n.id===b.ni), nj=nodos.find(n=>n.id===b.nj);
+    if(!ni||!nj) return {x:0,y:1};
+    const dx=nj.x-ni.x, dy=nj.y-ni.y, L=Math.hypot(dx,dy)||1;
+    return {x:-dy/L,y:dx/L};
+  }
+  return {x:0,y:-1};
+}
+function distLoadInfo(c,b,nodos){
+  nodos=nodos||AppState.nodos;
+  const ni=nodos.find(n=>n.id===b.ni), nj=nodos.find(n=>n.id===b.nj);
+  if(!ni||!nj) return null;
+  const dx=nj.x-ni.x, dy=nj.y-ni.y, L=Math.hypot(dx,dy);
+  if(L<1e-12) return null;
+  const t0=c.a??0,t1=c.b??1,span=Math.max(0,t1-t0),w=span*L;
+  const qi=c.qi??c.q??0,qj=c.qj??c.q??0;
+  const k=w>1e-12?(qj-qi)/w:0;
+  const R=(qi+qj)*w/2;
+  const S1=t0*L*R+qi*w*w/2+k*w*w*w/3; // ∫s q(s) ds desde ni
+  const tc=Math.abs(R)<1e-12?(t0+t1)/2:S1/(R*L);
+  const dir=loadDirection(c,b,nodos);
+  const Fx=R*dir.x,Fy=R*dir.y;
+  const momentNi=(dx/L*dir.y-dy/L*dir.x)*S1;
+  return {ni,nj,L,dx,dy,t0,t1,span,w,qi,qj,R,S1,tc,px:ni.x+tc*dx,py:ni.y+tc*dy,dir,Fx,Fy,momentNi};
+}
+function distDirectionLabel(c,pdfSafe){
+  const mode=c&&c.dir||'vertical';
+  const q=c&&c.tipo==='dist_tri'
+    ? ((c.qi??c.q??0)!==0?(c.qi??c.q):(c.qj??c.q??0))
+    : (c?(c.q??c.qi??0):0);
+  const sign=q<0?-1:1;
+  if(pdfSafe){
+    if(mode==='horizontal') return 'horiz.';
+    if(mode==='perp') return 'perp.';
+    if(mode==='angle') return 'ang. '+((((Number.isFinite(+c.ang)?+c.ang:0)+(sign<0?180:0))%360+360)%360)+'°';
+    return 'vert.';
+  }
+  if(mode==='horizontal') return sign>0?'→':'←';
+  if(mode==='perp') return '⟂';
+  if(mode==='angle'){
+    const a=(Number.isFinite(+c.ang)?+c.ang:0)+(sign<0?180:0);
+    return '∠'+(((a%360)+360)%360)+'°';
+  }
+  return sign>0?'↓':'↑';
+}
+function distLoadLabel(c,pdfSafe){
+  const d=distDirectionLabel(c,pdfSafe);
+  if(c.tipo==='dist_tri') return `qi=${c.qi??c.q??0}, qj=${c.qj??c.q??0} ${d}`;
+  return `q=${c.q??c.qi??0} ${d}`;
+}
 // v1.5.1: convierte coordenada X global a fracción de barra (0–1).
 // Retorna null si la barra es vertical (dx≈0): ahí solo vale fracción.
 function xToFrac(barId,x){
@@ -967,27 +1027,6 @@ function xToFrac(barId,x){
   if(Math.abs(dx)<1e-9) return null;
   const t=(x-ni.x)/dx;
   return Math.min(1,Math.max(0,t));
-}
-// v1.6.0: vector unitario de dirección de una carga distribuida.
-// ÚNICA fuente de verdad para descomponer (solucionador, internas, dibujo).
-// dir: 'vertical' (defecto) | 'horizontal' | 'perp' | 'angle' (grados antihorario desde +x).
-// Retorna {dx,dy} tal que la fuerza por unidad de longitud es q(s)·(dx,dy).
-function dirVector(c,b){
-  const dir=c.dir||'vertical';
-  if(dir==='horizontal') return {dx:1,dy:0};
-  if(dir==='angle'){
-    const a=(c.ang||0)*Math.PI/180;
-    return {dx:Math.cos(a),dy:Math.sin(a)};
-  }
-  if(dir==='perp'){
-    const ni=AppState.nodos.find(n=>n.id===b.ni);
-    const nj=AppState.nodos.find(n=>n.id===b.nj);
-    if(!ni||!nj) return {dx:0,dy:-1};
-    const L=Math.hypot(nj.x-ni.x,nj.y-ni.y)||1;
-    const th=Math.atan2(nj.y-ni.y,nj.x-ni.x);
-    return {dx:-Math.sin(th),dy:Math.cos(th)}; // ŷ local
-  }
-  return {dx:0,dy:-1}; // vertical: q>0 hacia abajo
 }
 
 function renderCanvas(){
@@ -1225,7 +1264,7 @@ function drawBar(b){
   g.addEventListener('contextmenu',e=>onContextMenu(e,'bar',b.id));
 
   if(b.hinge){
-    // Barra con rótula extrema: dibujar dos segmentos con símbolo ⊣⊢ en el centro
+    // Barra con rótula interna: dibujar dos segmentos con símbolo ⊣⊢ en el centro
     const mx=(x1+x2)/2, my=(y1+y2)/2;
     const dx=x2-x1, dy=y2-y1;
     const len=Math.sqrt(dx*dx+dy*dy)||1;
@@ -1348,11 +1387,11 @@ function drawLoad(c){
   } else if(c.tipo==='dist'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b,c);
+    drawDistLoad(b,c);
   } else if(c.tipo==='dist_tri'){
     const b=AppState.barras.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b,c);
+    drawDistLoad(b,c);
   }
 }
 
@@ -1398,38 +1437,35 @@ function drawMoment(sx,sy,val,color){
   svgText(sx,sy-r-10,`M=${R(val)}`,color,10,'middle');
 }
 
-function drawDistLoad(b,qi,qj,tipo,la,lb,c){
-  const ni=AppState.nodos.find(n=>n.id===b.ni);
-  const nj=AppState.nodos.find(n=>n.id===b.nj);
-  if(!ni||!nj) return;
-  la=(la==null?0:la); lb=(lb==null?1:lb);
-  const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
-  const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
-  // v1.6.0: dirección de las flechas según dirVector (pantalla: y invertida).
-  const dv=c?dirVector(c,b):{dx:0,dy:-1};
-  const sdx=dv.dx, sdy=-dv.dy;
-  const n=8;
-  const scaleArrow=30;
-  const qAbs=Math.abs(qi)+Math.abs(qj)+0.001;
-  const alen=t=>Math.min(40,Math.abs(qi+(qj-qi)*t)*scaleArrow/qAbs);
-  // signo: q>0 va en +d; q<0 invierte
-  const sgn=t=>((qi+(qj-qi)*t)<0?-1:1);
+function drawDistArrow(x1,y1,x2,y2,color){
+  svgLine(x1,y1,x2,y2,color,1.5);
+  const a=Math.atan2(y2-y1,x2-x1), h=6;
+  const p1x=x2-h*Math.cos(a-0.45), p1y=y2-h*Math.sin(a-0.45);
+  const p2x=x2-h*Math.cos(a+0.45), p2y=y2-h*Math.sin(a+0.45);
+  const p=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  p.setAttribute('points',`${x2},${y2} ${p1x},${p1y} ${p2x},${p2y}`);p.setAttribute('fill',color);svg.appendChild(p);
+}
+function drawDistLoad(b,c){
+  const info=distLoadInfo(c,b);
+  if(!info) return;
+  const {ni,nj,qi,qj,t0,t1,dir}=info;
+  const {sx:x1,sy:y1}=toSVG(ni.x,ni.y), {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
+  const n=8, maxQ=Math.max(Math.abs(qi),Math.abs(qj),1e-9), scale=34/maxQ;
+  const pointAt=(t)=>({x:x1+(x2-x1)*t,y:y1+(y2-y1)*t});
+  const qAt=u=>qi+(qj-qi)*u;
+  const tipAt=u=>{
+    const t=t0+(t1-t0)*u, base=pointAt(t), len=qAt(u)*scale;
+    return {x:base.x+dir.x*len,y:base.y-dir.y*len};
+  };
   for(let i=0;i<=n;i++){
-    const t=i/n;
-    const u=la+(lb-la)*t;
-    const bx=x1+(x2-x1)*u;
-    const by=y1+(y2-y1)*u;
-    const L=alen(t)*sgn(t);
-    svgLine(bx,by,bx+sdx*L,by+sdy*L,'#ff7b3d',1.5);
+    const u=i/n, base=pointAt(t0+(t1-t0)*u), tip=tipAt(u);
+    if(Math.hypot(tip.x-base.x,tip.y-base.y)>1e-6) drawDistArrow(base.x,base.y,tip.x,tip.y,'#ff7b3d');
   }
-  // Línea superior (solo el tramo cargado): une las puntas
-  const xa=x1+(x2-x1)*la, ya=y1+(y2-y1)*la;
-  const xb=x1+(x2-x1)*lb, yb=y1+(y2-y1)*lb;
-  const L0=alen(0)*sgn(0), L1=alen(1)*sgn(1);
-  svgLine(xa+sdx*L0,ya+sdy*L0,xb+sdx*L1,yb+sdy*L1,'#ff7b3d',1.5);
-  const dirLbl=c&&c.dir&&c.dir!=='vertical'?({horizontal:' ←→',perp:' ⟂',angle:' ∠'+(c.ang||0)+'°'}[c.dir]||''):'';
-  svgText((xa+xb)/2+sdx*L0,(ya+yb)/2+sdy*L0-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}${dirLbl}`,
-          '#ff7b3d',10,'middle');
+  const ta=tipAt(0),tb=tipAt(1);
+  svgLine(ta.x,ta.y,tb.x,tb.y,'#ff7b3d',1.5);
+  const mid={x:(ta.x+tb.x)/2,y:(ta.y+tb.y)/2};
+  const qmid=(qi+qj)/2, sgn=qmid<0?-1:1;
+  svgText(mid.x+dir.x*sgn*12,mid.y-dir.y*sgn*12,distLoadLabel(c,false),'#ff7b3d',10,'middle');
 }
 
 function drawDiagram(d){
@@ -1626,7 +1662,7 @@ function onContextMenu(e,type,id){
   if(type==='bar'){
     const b=AppState.barras.find(ba=>ba.id===id);
     document.getElementById('ctx-hinge').textContent=
-      b&&b.hinge ? '⊣⊢ Quitar rótula extrema' : '⊣⊢ Insertar rótula extrema';
+      b&&b.hinge ? '⊣⊢ Quitar rótula interna' : '⊣⊢ Insertar rótula interna';
   }
   menu.style.display='block';
   renderCanvas();
@@ -1694,15 +1730,11 @@ function ctxAction(action){
        </div>
        <div class="modal-row"><label>q inicial (${unitLabel()}/m)</label><input id="m-qi" type="number" step="0.5" value="5"></div>
        <div class="modal-row"><label>q final (solo triangular)</label><input id="m-qj" type="number" step="0.5" value="0"></div>
-       <div class="modal-row"><label>Dirección</label>
-        <select id="m-qdir" onchange="document.getElementById('m-qang-row').style.display=this.value==='angle'?'block':'none';">
-          <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
-          <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
-          <option value="perp">Perpendicular a la barra</option>
-          <option value="angle">Ángulo personalizado</option>
-        </select>
-       </div>
-       <div class="modal-row" id="m-qang-row" style="display:none"><label>Ángulo (° antihorario desde +x)</label><input id="m-qang" type="number" step="1" value="0"></div>
+       <div class="modal-row"><label>Dirección</label><select id="m-ddir" onchange="toggleDistDir('m-d')">
+         <option value="vertical">Vertical ↓</option><option value="horizontal">Horizontal →/←</option>
+         <option value="perp">Perpendicular a la barra</option><option value="angle">Ángulo personalizado</option>
+       </select></div>
+       <div id="m-dangle" style="display:none"><div class="modal-row"><label>Ángulo (°)</label><input id="m-dang" type="number" step="1" value="0"></div></div>
        <div class="modal-row"><label>Modo de tramo</label>
         <select id="m-qmode" onchange="document.getElementById('m-qfrac').style.display=this.value==='frac'?'block':'none';document.getElementById('m-qx').style.display=this.value==='x'?'block':'none';">
           <option value="frac">Fracción de barra (0–1)</option>
@@ -1733,9 +1765,9 @@ function ctxAction(action){
           qb=clamp01(+document.getElementById('m-qb').value||1);
         }
         if(qb<=qa) qb=1;
-        const qdir=document.getElementById('m-qdir').value;
-        const qang=qdir==='angle'?(+document.getElementById('m-qang').value||0):0;
-        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'bar',tipo,q:qi,qi,qj,a:qa,b:qb,dir:qdir,ang:qang});
+        const dir=document.getElementById('m-ddir').value;
+        const ang=dir==='angle'?(+document.getElementById('m-dang').value||0):0;
+        AppState.cargas.push({id:++AppState._loadCounter,elem:ctxTarget.id,elemType:'bar',tipo,q:qi,qi,qj,a:qa,b:qb,dir,ang});
         updateTables(); renderCanvas(); updateStatusBar();
       });
   }
@@ -1849,7 +1881,7 @@ function updateTables(){
       <td style="font-family:var(--font-mono)">${L}</td>
       <td style="font-family:var(--font-mono)">${ang}°</td>
       <td style="text-align:center">
-        <input type="checkbox" title="Rótula extrema" ${b.hinge?'checked':''}
+        <input type="checkbox" title="Rótula interna" ${b.hinge?'checked':''}
           onchange="toggleHinge(${b.id},this.checked)"
           style="accent-color:var(--accent-yellow);cursor:pointer;width:14px;height:14px">
         ${b.hinge?`<br><select title="Extremo de la rótula" onchange="setHingeEnd(${b.id},this.value)" style="font-size:10px;max-width:64px">
@@ -1882,14 +1914,12 @@ function updateTables(){
     } else if(c.tipo==='dist'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      const dl=c.dir&&c.dir!=='vertical'?({horizontal:' horiz.',perp:' perp.',angle:' ang.'+(c.ang||0)+'°'}[c.dir]||''):'';
-      val=`q=${c.q}${dl}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
+      val=distLoadLabel(c,false)+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Dist.';
     } else if(c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(b){const ni=AppState.nodos.find(n=>n.id===b.ni);const nj=AppState.nodos.find(n=>n.id===b.nj);elem=ni&&nj?ni.name+nj.name:'?';}
-      const dl=c.dir&&c.dir!=='vertical'?({horizontal:' horiz.',perp:' perp.',angle:' ang.'+(c.ang||0)+'°'}[c.dir]||''):'';
-      val=`qi=${c.qi}→qj=${c.qj}${dl}`+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
+      val=distLoadLabel(c,false)+(((c.a??0)!==0||(c.b??1)!==1)?` [${c.a??0}–${c.b??1}]`:'');
       tipo='Tri.';
     }
     tr.innerHTML=`<td>${elem}</td><td>${tipo}</td><td colspan="2" style="font-size:10px;font-family:var(--font-mono)">${val}</td><td><button class="btn-del" onclick="deleteLoad(${c.id})">×</button></td>`;
@@ -1982,16 +2012,12 @@ function addLoadForm(){
        <div class="modal-row"><label>q inicial</label><input id="m-lqi" type="number" step="0.5" value="5"></div>
        <div class="modal-row"><label>q final</label><input id="m-lqj" type="number" step="0.5" value="0"></div>
      </div>
-     <div id="lf-dir" style="display:none">
-       <div class="modal-row"><label>Dirección</label>
-         <select id="m-ldir" onchange="document.getElementById('m-lang-row').style.display=this.value==='angle'?'block':'none';">
-           <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
-           <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
-           <option value="perp">Perpendicular a la barra</option>
-           <option value="angle">Ángulo personalizado</option>
-         </select>
-       </div>
-       <div class="modal-row" id="m-lang-row" style="display:none"><label>Ángulo (° antihorario desde +x)</label><input id="m-lang" type="number" step="1" value="0"></div>
+     <div id="lf-direction" style="display:none">
+       <div class="modal-row"><label>Dirección</label><select id="m-ldir" onchange="toggleDistDir('m-l')">
+         <option value="vertical">Vertical ↓</option><option value="horizontal">Horizontal →/←</option>
+         <option value="perp">Perpendicular a la barra</option><option value="angle">Ángulo personalizado</option>
+       </select></div>
+       <div id="m-langle" style="display:none"><div class="modal-row"><label>Ángulo (°)</label><input id="m-lang" type="number" step="1" value="0"></div></div>
      </div>
      <div id="lf-pos" style="display:none">
        <div class="modal-row"><label>Posición en la barra (0=ini, 1=fin)</label><input id="m-lpos" type="number" step="0.05" min="0" max="1" value="0.5"></div>
@@ -2051,7 +2077,7 @@ function toggleLoadFields(){
   document.getElementById('lf-tri').style.display=v==='dist_tri'?'block':'none';
   document.getElementById('lf-pos').style.display=((v==='Fx'||v==='M')&&isBar)?'block':'none';
   document.getElementById('lf-range').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
-  document.getElementById('lf-dir').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
+  document.getElementById('lf-direction').style.display=(v==='dist'||v==='dist_tri')?'block':'none';
   // v1.5.1: pre-llenar X y deshabilitar modo X en barras verticales
   if((v==='dist'||v==='dist_tri')&&isBar){
     const bid=+sel.slice(1);
@@ -2080,6 +2106,11 @@ function toggleQMode(){
   document.getElementById('lf-range-frac').style.display=mx?'none':'block';
   document.getElementById('lf-range-x').style.display=mx?'block':'none';
 }
+function toggleDistDir(prefix){
+  const sel=document.getElementById(prefix+'dir');
+  const ang=document.getElementById(prefix+'angle');
+  if(ang) ang.style.display=sel&&sel.value==='angle'?'block':'none';
+}
 
 // ══════════════════════════════════════════════════════════
 // 8. MÓDULOS DE CÁLCULO
@@ -2102,11 +2133,8 @@ function calcReactions(){
     if(c.tipo==='Fx'){ SFx+=c.fx||0; SFy+=c.fy||0; }
     else if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
-      if(b){
-        const L=getBarLength(b);
-        const qavg=(c.qi+c.qj)/2;
-        SFy-=qavg*L; // Carga vertical hacia abajo
-      }
+      const info=b&&distLoadInfo(c,b);
+      if(info){ SFx+=info.Fx; SFy+=info.Fy; }
     }
   });
 
@@ -2129,14 +2157,9 @@ function calcReactions(){
       const ni=AppState.nodos.find(n=>n.id===b.ni);
       const nj=AppState.nodos.find(n=>n.id===b.nj);
       if(!ni||!nj) return;
-      const L=getBarLength(b);
-      const qi=c.qi||c.q||0, qj=c.qj||c.q||0;
-      const t0=c.a??0, t1=c.b??1, span=Math.max(0,t1-t0); // v1.5: tramo parcial
-      // Resultante y brazo de momento
-      const Rres=((qi+qj)/2)*span*L;
-      const tc=(Math.abs(qi+qj)<1e-12)?(t0+t1)/2:t0+span*(qi+2*qj)/(3*(qi+qj)); // v1.5: centroide corregido
-      const xcg=ni.x+(nj.x-ni.x)*tc;
-      SM-=(Rres*(xcg-ref.x));
+      const info=distLoadInfo(c,b);
+      if(!info) return;
+      SM+=(ni.x-ref.x)*info.Fy-(ni.y-ref.y)*info.Fx+info.momentNi;
     }
   });
 
@@ -2255,7 +2278,7 @@ function calcEstabilidad(){
   // E = 3N + Ec       (ecuaciones de equilibrio + condiciones de continuidad)
   //   B  = barras (miembros)
   //   N  = nodos
-  //   Ec = ecuaciones adicionales por rótulas extremas (h condiciones M=0)
+  //   Ec = ecuaciones adicionales por rótulas internas (h condiciones M=0)
   const B  = m;
   const N  = n;
   const Ec = h;
@@ -2315,12 +2338,12 @@ function calcEstabilidad(){
       pasos.push('&nbsp;&nbsp;• Agregar <strong>'+falta+' barra(s)</strong> en zonas sin triangulación.');
       if(falta>=2) pasos.push('&nbsp;&nbsp;• Agregar <strong>1 articulado fijo</strong> (aporta 2 reacciones).');
       pasos.push('&nbsp;&nbsp;• Agregar <strong>1 rodillo</strong> por cada grado faltante (1 reacción c/u).');
-      if(h>0) pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+Math.min(h,falta)+' rótula(s) extrema(s)</strong>.');
+      if(h>0) pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+Math.min(h,falta)+' rótula(s) interna(s)</strong>.');
     } else if(f>0){
       pasos.push('<strong>Sobran '+f+' vínculo(s). Opciones:</strong>');
       pasos.push('&nbsp;&nbsp;• Eliminar <strong>'+f+' barra(s)</strong> redundantes.');
       pasos.push('&nbsp;&nbsp;• Reemplazar empotrado por articulado (libera 1 grado).');
-      pasos.push('&nbsp;&nbsp;• Insertar <strong>'+f+' rótula(s) extrema(s) ⊣⊢</strong>.');
+      pasos.push('&nbsp;&nbsp;• Insertar <strong>'+f+' rótula(s) interna(s) ⊣⊢</strong>.');
     }
     if(!geoOk&&f===0){
       pasos.push('<strong>Reubicación necesaria:</strong>');
@@ -2372,7 +2395,7 @@ function calcEstabilidad(){
       +'<span class="eq-label">Nudos:</span> '+n+' &nbsp;|&nbsp;'
       +'<span class="eq-label">Barras:</span> '+m+' &nbsp;|&nbsp;'
       +'<span class="eq-label">Reacciones:</span> '+r+'<br>'
-      +(h>0?'<span class="eq-label">h =</span> '+h+' rótulas extremas ⊣⊢<br>':'')
+      +(h>0?'<span class="eq-label">h =</span> '+h+' rótulas internas ⊣⊢<br>':'')
       +'<span class="eq-label">Nodos libres:</span> '+nodosLibresStr+'<br>'
       +'<span class="eq-label">Vínculos externos:</span> '+apoyosStr
     +'</div>'
@@ -2469,14 +2492,10 @@ function calcArco(){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(!b) return;
       const ni=AppState.nodos.find(n=>n.id===b.ni);
-      const nj=AppState.nodos.find(n=>n.id===b.nj);
-      const L=getBarLength(b);
-      const qavg=(c.qi+c.qj)/2;
-      const Ftot=-qavg*L;
-      const xcg=(ni.x+nj.x)/2;
-      const ycg=(ni.y+nj.y)/2;
-      SFy+=Ftot;
-      SM_A+=Ftot*(xcg-A.x);
+      const info=distLoadInfo(c,b);
+      if(!ni||!info) return;
+      SFx+=info.Fx; SFy+=info.Fy;
+      SM_A+=(ni.x-A.x)*info.Fy-(ni.y-A.y)*info.Fx+info.momentNi;
     }
   });
 
@@ -2803,7 +2822,7 @@ function calcSecciones(){
 
 // ── Módulo 5: Pórtico ──
 function calcPortico(){
-  // v1.4.2: solucionador isostático por despiece (maneja rótulas extremas)
+  // v1.4.2: solucionador isostático por despiece (maneja rótulas internas)
   const iso=solveIsoFrame(AppState.nodos, AppState.barras, AppState.cargas);
   let rxCalc, isoRes=null;
   if(iso.ok){
@@ -2837,7 +2856,7 @@ function calcPortico(){
       });
       const pts=[...tSet].sort((a,z)=>a-z).map(t=>{
         const s=t*me.L;
-        const {V,M,N}=internalForcesAt(me,cargasB,s); // v1.5: exacto por tramos; v1.6: N(s) con axial
+        const {N,V,M}=internalForcesAt(me,cargasB,s); // exacto por tramos
         return {t,v:R(V),m:R(M),n:R(N)};
       });
       diagramas.push({ni:b.ni,nj:b.nj,barId:me.barId,points:pts,L:me.L,
@@ -2873,22 +2892,10 @@ function calcPortico(){
       if(c.pos) tPoints.add(c.pos);
     });
 
-    const pts=[...tPoints].sort().map(t=>{
-      const x=t*L;
-      let V=V0, M=M0, N=N0;
-      loadsBarra.forEach(c=>{
-        if(c.tipo==='dist'||c.tipo==='dist_tri'){
-          const qi=c.qi||c.q||0, qj=c.qj||c.q||0;
-          if(x>0){
-            const qx=qi+(qj-qi)*t;
-            V+=qi*x+(qj-qi)*x*x/(2*L);
-            M-=qi*x*x/2+(qj-qi)*x*x*x/(6*L);
-          }
-        } else if(c.tipo==='Fx' && c.pos && x>=c.pos*L){
-          V+=c.fy||0;
-          M+=(c.fy||0)*(x-c.pos*L);
-        }
-      });
+    const meFallback={barId:b.id,L,th:Math.atan2(nj.y-ni.y,nj.x-ni.x),dNi:{N:N0,V:V0,M:M0}};
+    loadsBarra.forEach(c=>{ if(c.tipo==='dist'||c.tipo==='dist_tri'){tPoints.add(c.a??0);tPoints.add(c.b??1);} });
+    const pts=[...tPoints].sort((a,z)=>a-z).map(t=>{
+      const {N,V,M}=internalForcesAt(meFallback,loadsBarra,t*L);
       return {t,v:R(V),m:R(M),n:R(N)};
     });
 
@@ -2965,7 +2972,7 @@ function calculate(){
 // ══════════════════════════════════════════════════════════
 const EJEMPLOS={
   1:()=>{
-    // Pórtico tipo asignación 1er corte — con rótula extrema entre C y F
+    // Pórtico tipo asignación 1er corte — con rótula interna entre C y F
     clearAllSilent();
     // Nodos nivel inferior
     addN('A',0,0,'fixed');
@@ -2986,7 +2993,7 @@ const EJEMPLOS={
     addB('B','J','frame'); addB('J','H','frame');
     // Miembros nivel superior con RÓTULA interna entre E y F
     addB('C','E','frame'); addB('E','F','frame'); addB('F','G','frame');
-    // Marcar rótula extrema en barra EF
+    // Marcar rótula interna en barra EF
     const bEF=AppState.barras[AppState.barras.length-2];
     if(bEF) bEF.hinge=true;
     // Miembros diagonales techo
@@ -3197,8 +3204,12 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.targ
 // 12. GUARDAR / CARGAR SESIÓN
 // ══════════════════════════════════════════════════════════
 function saveSession(){
+  const cargas=AppState.cargas.map(c=>
+    c.tipo==='dist'||c.tipo==='dist_tri'
+      ? {...c,dir:c.dir||'vertical',ang:Number.isFinite(+c.ang)?+c.ang:0}
+      : c);
   const data=JSON.stringify({version:'1.0',modulo:AppState.modulo,
-    nodos:AppState.nodos,barras:AppState.barras,cargas:AppState.cargas,
+    nodos:AppState.nodos,barras:AppState.barras,cargas,
     config:AppState.config,counters:{n:AppState._nodeCounter,b:AppState._barCounter,l:AppState._loadCounter}
   },null,2);
   const a=document.createElement('a');
@@ -3247,7 +3258,10 @@ function loadSession(e){
         m: c.m||c.moment||0,
         q: c.q||c.value||0,
         qi: c.qi||c.start||c.value||0,
-        qj: c.qj||c.end||c.value||0
+        qj: c.qj||c.end||c.value||0,
+        a: c.a??0,b: c.b??1,
+        dir: ['vertical','horizontal','perp','angle'].includes(c.dir)?c.dir:'vertical',
+        ang: Number.isFinite(+c.ang)?+c.ang:0
       }));
 
       // Contadores seguros para evitar colisiones de ID
@@ -3438,7 +3452,7 @@ function exportPDF(){
     tblRow(['Nodos totales (n)', n],[70,110]);
     tblRow(['Barras / miembros (m)', m],[70,110]);
     tblRow(['Reacciones externas (r)', r],[70,110]);
-    tblRow(['Rótulas extremas (h)', h+(h>0?' (rot.)':'')],[70,110]);
+    tblRow(['Rótulas internas (h)', h+(h>0?' (rot.)':'')],[70,110]);
     tblRow(['Nodos libres', nodosLibres],[70,110]);
     y+=2;
     line('Vínculos externos:',0,true);
@@ -3520,12 +3534,12 @@ function exportPDF(){
         line('• Agregar '+falta+' barra(s) en zonas sin triangulación.',4);
         if(falta>=2) line('• Agregar 1 articulado fijo (aporta 2 reacciones simultáneas).',4);
         line('• Agregar 1 rodillo por cada grado faltante (1 reacción c/u).',4);
-        if(h>0) line('• Eliminar '+Math.min(h,falta)+' rótula(s) extrema(s) existente(s).',4);
+        if(h>0) line('• Eliminar '+Math.min(h,falta)+' rótula(s) interna(s) existente(s).',4);
       } else if(f>0){
         line('Sobran '+f+' vínculo(s). Opciones:',0,true);
         line('• Eliminar '+f+' barra(s) redundantes.',4);
         line('• Reemplazar apoyo empotrado por articulado (libera 1 grado).',4);
-        line('• Insertar '+f+' rótula(s) extrema(s) ⊣⊢ en miembros existentes.',4);
+        line('• Insertar '+f+' rótula(s) interna(s) ⊣⊢ en miembros existentes.',4);
       }
       if(!geoOk && f===0){
         line('Reubicación necesaria:',0,true);
@@ -3573,7 +3587,8 @@ function exportPDF(){
         const ul=unitLabel(), ulM=ul==='kN'?'kN·m':(ul==='Ton'?'Ton·m':'kips·ft');
         drawMiniDiag('V ('+ul+')',d.points.map(p=>({t:p.t,v:p.v})));
         drawMiniDiag('M ('+ulM+')',d.points.map(p=>({t:p.t,v:p.m})));
-        if(d.eqV) line('Ecuaciones: '+d.eqV+'   |   '+d.eqM,2);
+        drawMiniDiag('N ('+ul+')',d.points.map(p=>({t:p.t,v:p.n})));
+        if(d.eqV) line('Ecuaciones: '+(d.eqN||'')+'   |   '+d.eqV+'   |   '+d.eqM,2);
         y+=4;
       });
     }
@@ -3644,7 +3659,8 @@ function exportPDF(){
    CONVENCIONES (globales):
      Fx → +x (derecha) | Fy → +y (arriba) | M → + antihorario
    - Las fuerzas en extremos de barra son las que el NUDO ejerce SOBRE LA BARRA.
-   - Cargas 'dist': q > 0 hacia ABAJO (convención de la app).
+   - Cargas distribuidas: q > 0 sigue la dirección `dir` de cada carga
+     (vertical por defecto en modelos anteriores).
    - Cargas puntuales 'Fx'/'Fy': (fx, fy) con fy + arriba. Momentos 'M': + antihorario.
    - Despiece local por barra: s desde ni (0..L); N + tracción;
      V + en dirección +ŷ local; M + = flexión con concavidad hacia +ŷ
@@ -3785,19 +3801,12 @@ function solveIsoFrame(nodos, barras, cargas) {
     // Cargas aplicadas SOBRE la barra
     for (const cg of cargas.filter(x => x.elem === b.id && loadTarget(x, nodos) === 'bar')) {
       if (cg.tipo === 'dist' || cg.tipo === 'dist_tri') {
-        const qi = cg.qi ?? cg.q ?? 0, qj = cg.qj ?? cg.q ?? 0;
-        const t0 = cg.a ?? 0, t1 = cg.b ?? 1; // v1.5: tramo cargado (fracción de barra)
-        const span = Math.max(0, t1 - t0);
-        const qavg = (qi + qj) / 2;
-        if (Math.abs(qavg) < 1e-12 || span < 1e-12) continue;
-        // v1.6.0: resultante descompuesta según dirección (dirVector).
-        const dv = dirVector(cg, b);
-        const Rmod = qavg * span * L; // módulo con signo de q
-        const Rfx = Rmod * dv.dx, Rfy = Rmod * dv.dy;
-        const tc = (Math.abs(qi + qj) < 1e-12) ? (t0 + t1) / 2 : t0 + span * (qi + 2 * qj) / (3 * (qi + qj)); // v1.5: centroide corregido
-        const px = a.x + tc * dx, py = a.y + tc * dy;
-        eFx.b += -Rfx; eFy.b += -Rfy;
-        eM.b += -((px - a.x) * Rfy - (py - a.y) * Rfx); // brazos cruzados, +antihorario
+        const info=distLoadInfo(cg,b,nodos);
+        if(!info) continue;
+        eFx.b-=info.Fx;
+        eFy.b-=info.Fy;
+        // Momento externo: (r−r_i)×R, con Fx y Fy y sus brazos cruzados.
+        eM.b-=info.momentNi;
       } else if (cg.tipo === 'Fx' || cg.tipo === 'Fy') {
         const t = cg.pos ?? 0.5;
         const px = a.x + t * dx, py = a.y + t * dy;
@@ -3889,38 +3898,37 @@ function solveIsoFrame(nodos, barras, cargas) {
    Convención: V+ en +ŷ local, M+ sagante (igual que dNi/dNj). */
 function internalForcesAt(me, cargasB, s){
   const co=Math.cos(me.th), si=Math.sin(me.th);
-  const V0=me.dNi.V, M0=me.dNi.M, N0=me.dNi.N;
-  let V=V0, M=M0+V0*s, N=N0; // M(s)=M0+V0·s−Σ(momentos de las cargas respecto al corte)
-  const L=me.L;
-  const _bar=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
+  const N0=me.dNi.N, V0=me.dNi.V, M0=me.dNi.M;
+  let N=N0,V=V0,M=M0+V0*s;
+  const L=me.L, bar=AppState.barras.find(b=>b.id===me.barId);
+  const nx=-si,ny=co;
   for(const c of (cargasB||[])){
     if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
-      const la=(c.a??0)*L, lb=(c.b??1)*L;
-      if(lb<=la+1e-12||s<=la+1e-12) continue;
-      const se=Math.min(s,lb), w=se-la; // tramo cargado hasta s
-      const k=(qj-qi)/Math.max(1e-12,(lb-la));
-      // v1.6.0: dirección general. tF = d·ŷ (transversa), aF = d·x̂ (axial).
-      const dv=_bar?dirVector(c,_bar):{dx:0,dy:-1};
-      const tF=dv.dx*(-si)+dv.dy*co;
-      const aF=dv.dx*co+dv.dy*si;
-      const qT_w=(qi*w+k*w*w/2)*tF; // resultante transversa hasta s
-      const qA_w=(qi*w+k*w*w/2)*aF; // resultante axial hasta s
-      const dM=((s-la)*(qi*w+k*w*w/2)-(qi*w*w/2+k*w*w*w/3));
-      V+=qT_w; M+=dM*tF; N+=qA_w;
+      const la=(c.a??0)*L,lb=(c.b??1)*L;
+      if(lb<=la+1e-12||s<=la+1e-12||!bar) continue;
+      const se=Math.min(s,lb),w=se-la;
+      const k=(qj-qi)/Math.max(1e-12,lb-la),dir=loadDirection(c,bar);
+      const axial=dir.x*co+dir.y*si;
+      const perp=-(dir.x*nx+dir.y*ny); // mantiene V+ y M+ de la app
+      const intQ=qi*w+k*w*w/2;
+      const intQlever=(s-la)*intQ-(qi*w*w/2+k*w*w*w/3);
+      N-=axial*intQ;
+      V-=perp*intQ;
+      M-=perp*intQlever;
     } else if(c.tipo==='Fx'||c.tipo==='Fy'){
       const sp=(c.pos??0.5)*L;
       if(s>=sp-1e-9){
-        const fT=-(c.fx||0)*si+(c.fy||0)*co; // componente transversa (+ŷ)
-        const fA=(c.fx||0)*co+(c.fy||0)*si;  // componente axial (+x̂)
-        V+=fT; M+=fT*(s-sp); N+=fA;
+        const fx=c.fx||0,fy=c.fy||0;
+        const fA=fx*co+fy*si, fT=-fx*si+fy*co;
+        N-=fA; V+=fT; M+=fT*(s-sp);
       }
     } else if(c.tipo==='M'){
       const sp=(c.pos??0.5)*L;
-      if(s>=sp-1e-9) M-=(c.m||0); // par antihorario (+) produce salto −m en M(s)
+      if(s>=sp-1e-9) M-=(c.m||0);
     }
   }
-  return {V,M,N};
+  return {N,V,M};
 }
 
 /* Ecuaciones V(s), M(s) por barra (s desde ni, 0..L), por tramos.
@@ -3964,37 +3972,38 @@ function memberEquations(me, cargasBarra){
 
   // Ecuaciones por tramo: acumulación analítica de coeficientes
   const co=Math.cos(me.th), si=Math.sin(me.th);
-  const V0=me.dNi.V, M0=me.dNi.M;
-  const _bar2=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
+  const N0=me.dNi.N,V0=me.dNi.V,M0=me.dNi.M;
   const fmt=n=>{ const v=Math.abs(n)<5e-9?0:n; return v.toFixed(3); };
-  const polyV=[], polyM=[];
+  const polyN=[],polyV=[],polyM=[];
+  const bar=AppState.barras.find(b=>b.id===me.barId);
   for(let i=0;i<bb.length-1;i++){
     const sa=bb[i], sb=bb[i+1];
     if(sb-sa<1e-9) continue;
-    let v0=V0,v1=0,v2=0, m0=M0,m1=V0,m2=0,m3=0;
+    let n0=N0,n1=0,n2=0,v0=V0,v1=0,v2=0,m0=M0,m1=V0,m2=0,m3=0;
     for(const c of (cargasBarra||[])){
       if(c.tipo==='dist'||c.tipo==='dist_tri'){
-        // v1.6.0: factor transverso general tF = d·ŷ. El polinomio usa (−tF)
-        // para conservar el patrón de signos (v0−=R, etc.).
-        const dv=_bar2?dirVector(c,_bar2):{dx:0,dy:-1};
-        const tF=dv.dx*(-si)+dv.dy*co;
-        const qi=(c.qi??c.q??0)*(-tF), qj=(c.qj??c.q??0)*(-tF); // intensidad transversa
+        const dir=bar?loadDirection(c,bar):{x:0,y:-1};
+        const axial=dir.x*co+dir.y*si,perp=-(dir.x*(-si)+dir.y*co);
+        const qiA=(c.qi??c.q??0)*axial,qjA=(c.qj??c.q??0)*axial;
+        const qi=(c.qi??c.q??0)*perp,qj=(c.qj??c.q??0)*perp; // proyección transversal
         const la=(c.a??0)*L, lb=(c.b??1)*L, w=lb-la;
         if(w<1e-12) continue;
-        const k=(qj-qi)/w;
-        if(sa>=lb-1e-9){ // carga toda a la izquierda: resultante
-          const R=(qi+qj)/2*w;
-          const cc=(Math.abs(qi+qj)<1e-12)?(la+lb)/2:la+w*(qi+2*qj)/(3*(qi+qj)); // centroide v1.5
-          v0-=R; m1-=R; m0+=R*cc;
+        const k=(qj-qi)/w,kA=(qjA-qiA)/w;
+        if(sa>=lb-1e-9){ // carga toda a la izquierda: fuerza y primer momento exactos
+          const R=(qi+qj)/2*w,RA=(qiA+qjA)/2*w;
+          const S1=la*R+qi*w*w/2+k*w*w*w/3;
+          n0-=RA; v0-=R; m1-=R; m0+=S1;
         } else if(sa>=la-1e-9){ // tramo dentro de la carga
+          n2-=kA/2; n1+=(kA*la-qiA); n0+=(qiA*la-kA*la*la/2);
           v2-=k/2; v1+=(k*la-qi); v0+=(qi*la-k*la*la/2);
           m3-=k/6; m2+=(k*la-qi)/2; m1+=(qi*la-k*la*la/2); m0-=(qi*la*la/2-k*la*la*la/6);
         }
       } else if(c.tipo==='Fx'||c.tipo==='Fy'){
         const sp=(c.pos??0.5)*L;
         if(sa>=sp-1e-9){
-          const fT=-(c.fx||0)*si+(c.fy||0)*co;
-          v0+=fT; m1+=fT; m0-=fT*sp;
+          const fx=c.fx||0,fy=c.fy||0;
+          const fA=fx*co+fy*si,fT=-fx*si+fy*co;
+          n0-=fA; v0+=fT; m1+=fT; m0-=fT*sp;
         }
       } else if(c.tipo==='M'){
         const sp=(c.pos??0.5)*L;
@@ -4002,8 +4011,10 @@ function memberEquations(me, cargasBarra){
       }
     }
     const seg=`s∈[${sa.toFixed(2)},${sb.toFixed(2)}]`;
+    const sn=`N(s) = ${fmt(n0)}${n1<0?'−':'+'}${fmt(Math.abs(n1))}·s${Math.abs(n2)>5e-9?(n2<0?'−':'+')+fmt(Math.abs(n2))+'·s²':''}  [${seg}]`;
     const sv=`V(s) = ${fmt(v0)}${v1<0?'−':'+'}${fmt(Math.abs(v1))}·s${Math.abs(v2)>5e-9?(v2<0?'−':'+')+fmt(Math.abs(v2))+'·s²':''}  [${seg}]`;
     const sm=`M(s) = ${fmt(m0)}${m1<0?'−':'+'}${fmt(Math.abs(m1))}·s${Math.abs(m2)>5e-9?(m2<0?'−':'+')+fmt(Math.abs(m2))+'·s²':''}${Math.abs(m3)>5e-9?(m3<0?'−':'+')+fmt(Math.abs(m3))+'·s³':''}  [${seg}]`;
+    polyN.push(sn.replace('+−','−').replace('−−','+'));
     polyV.push(sv.replace('+−','−').replace('−−','+'));
     polyM.push(sm.replace('+−','−').replace('−−','+'));
   }
@@ -4015,7 +4026,7 @@ function memberEquations(me, cargasBarra){
   if(sStar!=null) grid.add(sStar);
   for(const s of grid){ const m=Math.abs(F(s).M); if(m>MmaxAbs) MmaxAbs=m; }
   return { V0, M0, bounds:bb, sStar, hasPoint, MmaxAbs,
-    eqV: polyV.join('  |  '), eqM: polyM.join('  |  ') };
+    eqN: polyN.join('  |  '),eqV: polyV.join('  |  '),eqM: polyM.join('  |  ') };
 }
 
 
@@ -4153,6 +4164,7 @@ function despieceHTML(isoRes){
       +'<table class="result-table"><tr><th></th><th>N (kN)</th><th>V (kN)</th><th>M (kN·m)</th></tr>'
       +`<tr><td>Extremo ${nm(AppState.barras.find(x=>x.id===me.barId).ni)} (s=0)</td><td class="val">${R(me.dNi.N)}</td><td class="val">${R(me.dNi.V)}</td><td class="val">${R(me.dNi.M)}</td></tr>`
       +`<tr><td>Extremo ${nm(AppState.barras.find(x=>x.id===me.barId).nj)} (s=L)</td><td class="val">${R(me.dNj.N)}</td><td class="val">${R(me.dNj.V)}</td><td class="val">${R(me.dNj.M)}</td></tr></table>`
+      +`<span class="eq-label">N(s):</span> <span class="eq-comment">${eq.eqN}</span><br>`
       +`<span class="eq-label">V(s):</span> <span class="eq-comment">${eq.eqV}</span><br>`
       +`<span class="eq-label">M(s):</span> <span class="eq-comment">${eq.eqM}</span><br>`
       +(eq.sStar!=null

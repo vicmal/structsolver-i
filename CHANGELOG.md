@@ -1,24 +1,18 @@
 # Changelog — StructSolver I
 
-## v1.6.0 — Octubre 2026 (cargas distribuidas con dirección)
+## v1.5.2 — Octubre 2026 (dirección configurable de cargas distribuidas)
 ### Agregado
-- **Dirección configurable en distribuidas:** las cargas uniforme y triangular
-  aceptan dirección: Vertical (defecto), Horizontal, Perpendicular a la barra
-  o Ángulo personalizado (grados antihorario desde +x). Nueva función
-  `dirVector` como única fuente de verdad; el solucionador descompone la
-  resultante en (Fx,Fy) con brazos cruzados; `internalForcesAt` y
-  `memberEquations` usan la componente transversa (d·ŷ) y axial (d·x̂);
-  el dibujo traza las flechas en la dirección elegida. Permite modelar W1
-  (horizontal sobre barra inclinada) y W3 (triangular horizontal sobre
-  columna) sin discretizar en puntuales. Verificado: mismas reacciones que
-  la discretización (A:91,42,429; H:-86,84).
-- Caché del service worker: `structsolver-v152` → `structsolver-v160`.
-
-## v1.5.2 — Octubre 2026 (renombre de rótula)
-### Cambiado
-- **"Rótula interna" → "Rótula extrema":** en leyenda, menú contextual,
-  tabla de barras y mensajes. El nombre anterior confundía (parecía dentro
-  de la barra); el nuevo alude a que va en un extremo.
+- **Dirección para cargas uniformes y triangulares:** vertical (por defecto para
+  conservar modelos anteriores), horizontal, perpendicular a la barra o ángulo
+  personalizado en grados antihorarios desde +X.
+- Selector de dirección y campo condicional de ángulo en ambos formularios de
+  carga; flechas del canvas y tabla de cargas reflejan el sentido configurado.
+- Persistencia de `dir` y `ang` al guardar/cargar sesiones.
+### Corregido
+- Resultantes distribuidas se descomponen en Fx/Fy y el momento global incluye
+  ambos brazos cruzados.
+- N, V y M proyectan la carga completa sobre los ejes locales de cada barra;
+  las ecuaciones de miembro y los diagramas incorporan cargas oblicuas.
 - Caché del service worker: `structsolver-v151` → `structsolver-v152`.
 
 ## v1.5.1 — Octubre 2026 (tramo de distribuida por coordenada X)
