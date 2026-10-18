@@ -1,5 +1,16 @@
 # Changelog — StructSolver I
 
+## v1.5.1 — Octubre 2026 (tramo de distribuida por coordenada X)
+### Agregado
+- **Modo de tramo por coordenada X:** en las cargas distribuidas (uniforme y
+  triangular), el tramo puede definirse por **coordenada X global** (m) en vez
+  de fracción de barra (0–1). Útil cuando el enunciado da la carga por
+  proyección horizontal: se entra el rango en X y la app lo convierte a
+  fracción. En barras verticales el modo X se deshabilita (ahí solo vale
+  fracción). Disponible tanto en el menú contextual de la barra como en
+  "Agregar carga".
+- Caché del service worker: `structsolver-v150` → `structsolver-v151`.
+
 ## v1.5.0 — Octubre 2026 (cargas posicionadas y distribuidas parciales)
 ### Agregado
 - **Posición para cargas puntuales y pares:** el formulario "Agregar carga" ahora
