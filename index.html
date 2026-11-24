@@ -886,7 +886,7 @@ const AppState = {
   cutPoints: [],
   showV: true, showM: true, showN: true,
   viewMode: 'stacked', // 'stacked' (Sistema + DFC + DMF) | 'overlay'
-  invertM: true,       // true: +M hacia abajo (convención fibra traccionada, como en libros/clases)
+  invertM: true,       // true: +M hacia abajo (convención fibra traccionada)
   diagScale: 1,
   _nodeCounter: 0,
   _barCounter: 0,
@@ -1024,8 +1024,6 @@ function renderCanvas(){
   const emptyState=document.getElementById('empty-state');
   if(emptyState) emptyState.style.display=AppState.nodos.length?'none':'flex';
 
-  // Si estamos en Módulo 5, hay resultados de diagramas, la estructura es una viga horizontal
-  // y el modo apilado está activo: renderizar vista de 3 niveles (Sistema Inicial + DFC + DMF)
   if(AppState.modulo===5 && AppState.viewMode==='stacked' && AppState.resultados && AppState.resultados.diagramas && isCollinearHorizontalBeam()){
     renderStackedBeamView();
     return;
@@ -1072,7 +1070,6 @@ function renderStackedBeamView(){
   const scX=usableW/spanX;
   const mapX=x=>padL+(x-xMin)*scX;
 
-  // Coordenadas Y de las 3 franjas horizontales
   const ySys = Math.max(115, svgH*0.24);
   const yDFC = svgH*0.54;
   const yDMF = svgH*0.82;
@@ -1108,7 +1105,7 @@ function renderStackedBeamView(){
     svgText((xFirst+xLast)/2, yDimTot-7, `${R(spanX)} m`, '#4d9fff', 10, 'middle');
   }
 
-  // 3. NIVEL 1: SISTEMA INICIAL (Viga, apoyos, cargas y reacciones)
+  // 3. NIVEL 1: SISTEMA INICIAL (Viga, apoyos, cargas por encima y reacciones)
   svgText(38, ySys-18, 'SISTEMA', '#00e5ff', 10, 'middle');
   svgText(38, ySys-6, 'INICIAL', '#00e5ff', 10, 'middle');
 
@@ -1256,7 +1253,6 @@ function renderStackedBeamView(){
       poly.setAttribute('stroke-width', 2);
       svg.appendChild(poly);
 
-      // Etiquetas de valores extremos y signo en el tramo
       const p0=d.points[0], pEnd=d.points[d.points.length-1];
       if(Math.abs(p0.v)>1e-6){
         const yOff=p0.v>0?-11:13;
@@ -1266,7 +1262,6 @@ function renderStackedBeamView(){
         const yOff=pEnd.v>0?-11:13;
         svgText(x2-6, yDFC - pEnd.v*scV + yOff, `${R(Math.abs(pEnd.v))} ${ul}`, '#ff7b3d', 9.5, 'end');
       }
-      // Signo (+) / (-) dentro del área
       const pMid=d.points[Math.floor(d.points.length/2)];
       if(Math.abs(pMid.v)>maxV*0.08){
         svgText((x1+x2)/2, yDFC - pMid.v*scV*0.5, pMid.v>0?'(+)':'(−)', '#ffd740', 10, 'middle');
@@ -1278,7 +1273,6 @@ function renderStackedBeamView(){
   const allM=AppState.resultados.diagramas.flatMap(d=>d.points.map(p=>Math.abs(p.m)));
   const maxM=Math.max(1e-6, ...allM);
   const scM=bandH/maxM;
-  // Si invertM === true: valores negativos de M (tracción arriba en voladizos/apoyos) se dibujan hacia ARRIBA y +M hacia ABAJO (como en la figura)
   const mDir = AppState.invertM ? 1 : -1;
 
   svgText(32, yDMF, 'DMF', '#4d9fff', 12, 'middle');
@@ -1304,7 +1298,6 @@ function renderStackedBeamView(){
       poly.setAttribute('stroke-width', 2);
       svg.appendChild(poly);
 
-      // Etiquetas en inicio, fin y máximo local interior (donde V=0)
       const p0=d.points[0], pEnd=d.points[d.points.length-1];
       if(Math.abs(p0.m)>1e-6){
         const py0=yDMF + mDir*p0.m*scM;
@@ -1314,7 +1307,6 @@ function renderStackedBeamView(){
         const pyE=yDMF + mDir*pEnd.m*scM;
         svgText(x2-6, pyE + (mDir*pEnd.m<0?-10:12), `${R(Math.abs(pEnd.m))} ${ulM}`, '#ff7b3d', 9.5, 'end');
       }
-      // Buscar extremo local interior (cambio de pendiente / V=0)
       for(let i=1;i<d.points.length-1;i++){
         const prev=d.points[i-1], cur=d.points[i], next=d.points[i+1];
         if((prev.v>0 && next.v<0) || (prev.v<0 && next.v>0)){
@@ -1668,6 +1660,7 @@ function drawMoment(sx,sy,val,color){
   svgText(sx,sy-r-10,`M=${R(val)}`,color,10,'middle');
 }
 
+// Dibuja la carga distribuida apoyada por encima de la barra con flechas apuntando hacia ella
 function drawDistLoad(b,qi,qj,tipo,la,lb,c){
   const ni=AppState.nodos.find(n=>n.id===b.ni);
   const nj=AppState.nodos.find(n=>n.id===b.nj);
@@ -1688,14 +1681,26 @@ function drawDistLoad(b,qi,qj,tipo,la,lb,c){
     const bx=x1+(x2-x1)*u;
     const by=y1+(y2-y1)*u;
     const L=alen(t)*sgn(t);
-    svgLine(bx,by,bx+sdx*L,by+sdy*L,'#ff7b3d',1.5);
+    const ox=bx-sdx*L, oy=by-sdy*L;
+    svgLine(ox,oy,bx,by,'#ff7b3d',1.5);
+    if(Math.abs(L)>3){
+      const ang=Math.atan2(by-oy,bx-ox);
+      const hs=5;
+      const p1x=bx-hs*Math.cos(ang-0.45), p1y=by-hs*Math.sin(ang-0.45);
+      const p2x=bx-hs*Math.cos(ang+0.45), p2y=by-hs*Math.sin(ang+0.45);
+      const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      poly.setAttribute('points',`${bx},${by} ${p1x},${p1y} ${p2x},${p2y}`);
+      poly.setAttribute('fill','#ff7b3d');
+      svg.appendChild(poly);
+    }
   }
   const xa=x1+(x2-x1)*la, ya=y1+(y2-y1)*la;
   const xb=x1+(x2-x1)*lb, yb=y1+(y2-y1)*lb;
   const L0=alen(0)*sgn(0), L1=alen(1)*sgn(1);
-  svgLine(xa+sdx*L0,ya+sdy*L0,xb+sdx*L1,yb+sdy*L1,'#ff7b3d',1.5);
+  svgLine(xa-sdx*L0,ya-sdy*L0,xb-sdx*L1,yb-sdy*L1,'#ff7b3d',1.5);
   const dirLbl=c&&c.dir&&c.dir!=='vertical'?({horizontal:' ←→',perp:' ⟂',angle:' ∠'+(c.ang||0)+'°'}[c.dir]||''):'';
-  svgText((xa+xb)/2+sdx*L0,(ya+yb)/2+sdy*L0-10,`q=${R(qi)}${qi!==qj?'→'+R(qj):''}${dirLbl}`,
+  const yLbl=Math.min(ya-sdy*L0, yb-sdy*L1)-10;
+  svgText((xa+xb)/2-(sdx*(L0+L1))/2, yLbl, `q=${R(qi)}${qi!==qj?'→'+R(qj):''}${dirLbl}`,
           '#ff7b3d',10,'middle');
 }
 
@@ -3468,7 +3473,7 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.targ
 // 12. GUARDAR / CARGAR SESIÓN
 // ══════════════════════════════════════════════════════════
 function saveSession(){
-  const data=JSON.stringify({version:'1.6.2',modulo:AppState.modulo,
+  const data=JSON.stringify({version:'1.6.3',modulo:AppState.modulo,
     nodos:AppState.nodos,barras:AppState.barras,cargas:AppState.cargas,
     config:AppState.config,counters:{n:AppState._nodeCounter,b:AppState._barCounter,l:AppState._loadCounter}
   },null,2);
@@ -3898,7 +3903,7 @@ function exportPDF(){
 
 
 /* ============================================================================
-   StructSolver v1.6.2 — Solucionador isostático por despiece + método GD de clase
+   StructSolver v1.6.3 — Solucionador isostático por despiece + método GD de clase
    ============================================================================ */
 
 function hingeEndOfBar(bar, isSupport) {
