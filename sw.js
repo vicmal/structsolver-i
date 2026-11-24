@@ -1,7 +1,7 @@
-/* StructSolver I v1.5.2 — Service Worker: la app funciona offline.
+/* StructSolver I v1.6.1 — Service Worker: la app funciona offline.
    El shell (index.html + iconos + manifest) se sirve desde caché;
    las librerías CDN (jsPDF, Google Fonts) requieren internet. */
-const CACHE = 'structsolver-v152';
+const CACHE = 'structsolver-v161';
 const ASSETS = [
   './',
   './index.html',
