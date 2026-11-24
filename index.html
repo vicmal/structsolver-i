@@ -868,11 +868,10 @@ const AppState = {
   _nodeCounter: 0,
   _barCounter: 0,
   _loadCounter: 0,
-  _tempNode: null, // nodo pendiente de confirmar
+  _tempNode: null,
 };
 let diagScale = 1;
 
-// Nombres de letra automáticos
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function nextNodeName(){
   const used = AppState.nodos.map(n=>n.name);
@@ -968,13 +967,6 @@ function xToFrac(barId,x){
   return Math.min(1,Math.max(0,t));
 }
 
-// Convención vertical estándar: q < 0 hacia abajo (dy = +1 en pantalla/matemática, q*dy = -20 -> abajo)
-// Nota: Si q > 0 y dir === 'vertical', dy = -1 (hacia abajo); si q < 0, q * (-1) = +20 hacia arriba.
-// Para mantener compatibilidad total con cargas q = -10 y q = -20 hacia abajo:
-// En el UI, el usuario introduce q < 0 para cargas hacia abajo (como en el JSON: q = -10, qi = -20)
-// O q > 0 con convención "q > 0 hacia abajo". Unificamos: dirVector devuelve el vector unitario
-// en la dirección positiva de la carga, pero si q < 0 en modo vertical lo interpreta hacia abajo (dy = +1)
-// si el usuario ingresó signo negativo siguiendo el eje Y global.
 function dirVector(c,b){
   const dir=c.dir||'vertical';
   if(dir==='horizontal') return {dx:1,dy:0};
@@ -1014,9 +1006,11 @@ function renderCanvas(){
     svgLine(x1,y1,x2,y2,'rgba(77,159,255,0.5)',1.5,'5,5');
   }
 
+  // Líneas de corte (mod 4) — proyectado con zoom/pan actual
   if(AppState.cutPoints.length===2){
     const p1=AppState.cutPoints[0], p2=AppState.cutPoints[1];
-    svgLine(p1.sx,p1.sy,p2.sx,p2.sy,'rgba(255,215,0,0.7)',2,'6,4');
+    const s1=toSVG(p1.x,p1.y), s2=toSVG(p2.x,p2.y);
+    svgLine(s1.sx,s1.sy,s2.sx,s2.sy,'rgba(255,215,0,0.85)',2,'6,4');
   }
 
   AppState.cargas.forEach(c=>drawLoad(c));
@@ -2035,28 +2029,44 @@ function toggleQMode(){
 // 8. MÓDULOS DE CÁLCULO
 // ══════════════════════════════════════════════════════════
 
+// ── Reacciones externas matricial 3×3 general (Antigravity) ──
 function calcReactions(){
   const supports=AppState.nodos.filter(n=>n.support!=='none');
+  if(supports.length===0) return null;
   const reactions=[];
   supports.forEach(n=>{
-    if(n.support==='pin'){ reactions.push({nodeId:n.id,dof:'fx'},{nodeId:n.id,dof:'fy'}); }
-    else if(n.support==='roller_h'){ reactions.push({nodeId:n.id,dof:'fy'}); }
-    else if(n.support==='roller_v'){ reactions.push({nodeId:n.id,dof:'fx'}); }
-    else if(n.support==='fixed'){ reactions.push({nodeId:n.id,dof:'fx'},{nodeId:n.id,dof:'fy'},{nodeId:n.id,dof:'m'}); }
+    if(n.support==='pin'){ reactions.push({nodeId:n.id,name:n.name,dof:'fx'},{nodeId:n.id,name:n.name,dof:'fy'}); }
+    else if(n.support==='roller_h'){ reactions.push({nodeId:n.id,name:n.name,dof:'fy'}); }
+    else if(n.support==='roller_v'){ reactions.push({nodeId:n.id,name:n.name,dof:'fx'}); }
+    else if(n.support==='fixed'){ reactions.push({nodeId:n.id,name:n.name,dof:'fx'},{nodeId:n.id,name:n.name,dof:'fy'},{nodeId:n.id,name:n.name,dof:'m'}); }
   });
 
-  const ref=AppState.nodos.find(n=>n.support==='pin')||supports[0];
+  const ref=AppState.nodos.find(n=>n.support==='pin'||n.support==='fixed')||supports[0];
   if(!ref) return null;
 
   let SFx=0, SFy=0, SM=0;
   AppState.cargas.forEach(c=>{
-    if(c.tipo==='Fx'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
-      if(!n) return;
-      SFx+=c.fx||0; SFy+=c.fy||0;
-      SM+=(c.fy||0)*(n.x-ref.x) - (c.fx||0)*(n.y-ref.y);
+    if(c.tipo==='Fx'||c.tipo==='Fy'){
+      const fx=c.fx||0, fy=c.fy||0;
+      let px=0, py=0;
+      if(loadTarget(c, AppState.nodos)==='bar'){
+        const b=AppState.barras.find(ba=>ba.id===c.elem);
+        if(b){
+          const ni=AppState.nodos.find(n=>n.id===b.ni);
+          const nj=AppState.nodos.find(n=>n.id===b.nj);
+          if(ni&&nj){
+            const pos=c.pos!=null?c.pos:0.5;
+            px=ni.x+pos*(nj.x-ni.x); py=ni.y+pos*(nj.y-ni.y);
+          }
+        }
+      } else {
+        const n=AppState.nodos.find(no=>no.id===c.elem);
+        if(n){ px=n.x; py=n.y; }
+      }
+      SFx+=fx; SFy+=fy;
+      SM+=(fy*(px-ref.x)-fx*(py-ref.y));
     } else if(c.tipo==='M'){
-      SM+=c.m||0;
+      SM+=(c.m||0);
     } else if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(!b) return;
@@ -2067,41 +2077,52 @@ function calcReactions(){
       const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
       const t0=c.a??0, t1=c.b??1, span=Math.max(0,t1-t0);
       const qavg=(qi+qj)/2;
+      if(Math.abs(qavg)<1e-12||span<1e-12) return;
       const dv=dirVector(c,b);
       const Rmod=qavg*span*L;
       const Rfx=Rmod*dv.dx, Rfy=Rmod*dv.dy;
       const tc=(Math.abs(qi+qj)<1e-12)?(t0+t1)/2:t0+span*(qi+2*qj)/(3*(qi+qj));
-      const xcg=ni.x+(nj.x-ni.x)*tc;
-      const ycg=ni.y+(nj.y-ni.y)*tc;
+      const px=ni.x+tc*(nj.x-ni.x), py=ni.y+tc*(nj.y-ni.y);
       SFx+=Rfx; SFy+=Rfy;
-      SM+=Rfy*(xcg-ref.x) - Rfx*(ycg-ref.y);
+      SM+=(Rfy*(px-ref.x)-Rfx*(py-ref.y));
     }
   });
 
   const r=reactions.length;
   if(r===3){
-    const pinNodes=AppState.nodos.filter(n=>n.support==='pin');
-    const rollerNodes=AppState.nodos.filter(n=>n.support==='roller_h'||n.support==='roller_v');
-    if(pinNodes.length>=1 && rollerNodes.length>=1){
-      const A=pinNodes[0]; const B=rollerNodes[0];
-      const RBy = B.support==='roller_h' ? -SM/(B.x-A.x) : SM/(B.y-A.y);
-      const RAy = B.support==='roller_h' ? (-SFy - RBy) : -SFy;
-      const RAx = B.support==='roller_h' ? -SFx : (-SFx - RBy);
-      const res=[];
-      res.push({nodeId:A.id,fx:RAx,fy:RAy});
-      if(B.support==='roller_h') res.push({nodeId:B.id,fx:0,fy:RBy});
-      else res.push({nodeId:B.id,fx:RBy,fy:0});
-      return {reacciones:res, pasos:[
-        {titulo:'Cargas externas',body:`ΣFx = ${R(SFx)}\nΣFy = ${R(SFy)}\nΣM_${A.name} = ${R(SM)}`},
-        {titulo:'Reacciones calculadas',body:`R${A.name}x = ${R(RAx)}\nR${A.name}y = ${R(RAy)}\nR${B.name} = ${R(RBy)}`}
-      ]};
-    }
-  }
-  if(supports.some(n=>n.support==='fixed')&&supports.length===1){
-    const A=supports[0];
-    return {reacciones:[{nodeId:A.id,fx:-SFx,fy:-SFy,m:-SM}],pasos:[
-      {titulo:'Vínculo empotrado',body:`RAx=${R(-SFx)}\nRAy=${R(-SFy)}\nMA=${R(-SM)}`}
-    ]};
+    const A=[[0,0,0],[0,0,0],[0,0,0]];
+    const bVec=[-SFx,-SFy,-SM];
+    reactions.forEach((rx,i)=>{
+      const nd=AppState.nodos.find(n=>n.id===rx.nodeId);
+      if(!nd) return;
+      if(rx.dof==='fx'){
+        A[0][i]=1; A[1][i]=0; A[2][i]=-(nd.y-ref.y);
+      } else if(rx.dof==='fy'){
+        A[0][i]=0; A[1][i]=1; A[2][i]=(nd.x-ref.x);
+      } else if(rx.dof==='m'){
+        A[0][i]=0; A[1][i]=0; A[2][i]=1;
+      }
+    });
+
+    const sol=gaussianN(A,bVec);
+    if(!sol) return null;
+
+    const resMap={};
+    reactions.forEach((rx,i)=>{
+      if(!resMap[rx.nodeId]) resMap[rx.nodeId]={nodeId:rx.nodeId,fx:0,fy:0,m:0};
+      resMap[rx.nodeId][rx.dof]=sol[i];
+    });
+    const resList=Object.values(resMap);
+
+    const pasos=[
+      {titulo:'Cargas externas',body:`ΣFx = ${R(SFx)} ${unitLabel()}\nΣFy = ${R(SFy)} ${unitLabel()}\nΣM_${ref.name} = ${R(SM)} ${unitLabel()}·m`},
+      {titulo:'Reacciones calculadas',body:reactions.map((rx,i)=>{
+        const unit=rx.dof==='m'?`${unitLabel()}·m`:unitLabel();
+        const label=rx.dof==='fx'?`R${rx.name}x`:rx.dof==='fy'?`R${rx.name}y`:`M${rx.name}`;
+        return `${label} = ${R(sol[i])} ${unit}`;
+      }).join('\n')}
+    ];
+    return {reacciones:resList, pasos};
   }
   return null;
 }
@@ -2333,45 +2354,110 @@ function calcEstabilidad(){
   +planHTML+convPanelHTML(f);
 }
 
-// ── Módulo 2: Arco Triarticulado ──
+// ── Módulo 2: Arco Triarticulado 4x4 (Antigravity) ──
 function calcArco(){
+  const supports=AppState.nodos.filter(n=>n.support!=='none');
   const pins=AppState.nodos.filter(n=>n.support==='pin');
-  const rollers=AppState.nodos.filter(n=>n.support==='roller_h'||n.support==='roller_v');
-  if(pins.length+rollers.length<2){
+  if(supports.length<2){
     showResults('<div class="status-box status-error">⚠ Se necesitan al menos 2 apoyos externos.</div>');
     return;
   }
 
-  const A=pins[0]||rollers[0];
-  const B=rollers[0]||pins[1];
+  const A=pins[0]||supports[0];
+  const B=supports.find(n=>n.id!==A.id)||supports[1];
+  if(!A||!B){
+    showResults('<div class="status-box status-error">⚠ Se requieren dos apoyos (A y B).</div>');
+    return;
+  }
+
+  const freeNodes=AppState.nodos.filter(n=>n.support==='none');
+  let rotula=null;
+  if(freeNodes.length>0){
+    rotula=[...freeNodes].sort((a,b)=>b.y-a.y)[0];
+  }
+  if(!rotula) rotula=AppState.nodos.find(n=>n.id!==A.id&&n.id!==B.id);
 
   let SFx=0, SFy=0, SM_A=0;
+  let SM_C_left=0;
+  const xMaxRot=rotula?rotula.x:(A.x+B.x)/2;
+
   AppState.cargas.forEach(c=>{
-    if(c.tipo==='Fx'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
-      if(!n) return;
-      SFx+=c.fx||0; SFy+=c.fy||0;
-      SM_A+=(c.fy||0)*(n.x-A.x)-(c.fx||0)*(n.y-A.y);
+    if(c.tipo==='Fx'||c.tipo==='Fy'){
+      const fx=c.fx||0, fy=c.fy||0;
+      let px=0, py=0;
+      if(loadTarget(c, AppState.nodos)==='bar'){
+        const b=AppState.barras.find(ba=>ba.id===c.elem);
+        if(b){
+          const ni=AppState.nodos.find(n=>n.id===b.ni);
+          const nj=AppState.nodos.find(n=>n.id===b.nj);
+          if(ni&&nj){
+            const pos=c.pos!=null?c.pos:0.5;
+            px=ni.x+pos*(nj.x-ni.x); py=ni.y+pos*(nj.y-ni.y);
+          }
+        }
+      } else {
+        const n=AppState.nodos.find(no=>no.id===c.elem);
+        if(n){ px=n.x; py=n.y; }
+      }
+      SFx+=fx; SFy+=fy;
+      SM_A+=(fy*(px-A.x)-fx*(py-A.y));
+      if(rotula && px<=xMaxRot+1e-5){
+        SM_C_left+=(fy*(px-rotula.x)-fx*(py-rotula.y));
+      }
+    } else if(c.tipo==='M'){
+      SM_A+=(c.m||0);
+      if(rotula) SM_C_left+=(c.m||0);
     } else if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(!b) return;
       const ni=AppState.nodos.find(n=>n.id===b.ni);
       const nj=AppState.nodos.find(n=>n.id===b.nj);
+      if(!ni||!nj) return;
       const L=getBarLength(b);
-      const qavg=((c.qi??c.q??0)+(c.qj??c.q??0))/2;
+      const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
+      const t0=c.a??0, t1=c.b??1, span=Math.max(0,t1-t0);
+      const qavg=(qi+qj)/2;
+      if(Math.abs(qavg)<1e-12||span<1e-12) return;
       const dv=dirVector(c,b);
-      const Ffx=qavg*L*dv.dx, Ffy=qavg*L*dv.dy;
-      const xcg=(ni.x+nj.x)/2, ycg=(ni.y+nj.y)/2;
-      SFx+=Ffx; SFy+=Ffy;
-      SM_A+=Ffy*(xcg-A.x) - Ffx*(ycg-A.y);
+      const Rmod=qavg*span*L;
+      const Rfx=Rmod*dv.dx, Rfy=Rmod*dv.dy;
+      const tc=(Math.abs(qi+qj)<1e-12)?(t0+t1)/2:t0+span*(qi+2*qj)/(3*(qi+qj));
+      const px=ni.x+tc*(nj.x-ni.x), py=ni.y+tc*(nj.y-ni.y);
+      SFx+=Rfx; SFy+=Rfy;
+      SM_A+=(Rfy*(px-A.x)-Rfx*(py-A.y));
+      if(rotula && px<=xMaxRot+1e-5){
+        SM_C_left+=(Rfy*(px-rotula.x)-Rfx*(py-rotula.y));
+      }
     }
   });
 
-  const dx=B.x-A.x;
-  const RBy=-SM_A/dx;
-  const RAy=-SFy-RBy;
-  const RAx=-SFx;
-  const RBx=0;
+  let RAx=0, RAy=0, RBx=0, RBy=0;
+  const isBiarticulado=(A.support==='pin'&&B.support==='pin'&&rotula!=null);
+
+  if(isBiarticulado){
+    const mat=[
+      [1, 0, 1, 0],
+      [0, 1, 0, 1],
+      [0, 0, -(B.y-A.y), (B.x-A.x)],
+      [(rotula.y-A.y), -(rotula.x-A.x), 0, 0]
+    ];
+    const bVec=[-SFx, -SFy, -SM_A, -SM_C_left];
+    const sol=gaussianN(mat, bVec);
+    if(!sol){
+      showResults('<div class="status-box status-error">⚠ Geometría del arco singular o inestable. Verifique la posición de la rótula de la clave.</div>');
+      return;
+    }
+    [RAx, RAy, RBx, RBy]=sol;
+  } else {
+    const rxGen=calcReactions();
+    if(!rxGen){
+      showResults('<div class="status-box status-error">⚠ No se pudieron calcular las reacciones. Verifique los apoyos.</div>');
+      return;
+    }
+    const rA=rxGen.reacciones.find(r=>r.nodeId===A.id)||{fx:0,fy:0};
+    const rB=rxGen.reacciones.find(r=>r.nodeId===B.id)||{fx:0,fy:0};
+    RAx=rA.fx; RAy=rA.fy; RBx=rB.fx; RBy=rB.fy;
+  }
 
   AppState.resultados={
     reacciones:[
@@ -2382,28 +2468,31 @@ function calcArco(){
 
   const vFx=RAx+RBx+SFx;
   const vFy=RAy+RBy+SFy;
-  const vM=SM_A+RBy*dx;
+  const vMA=SM_A+RBy*(B.x-A.x)-RBx*(B.y-A.y);
+  const empujeH=Math.abs(RAx);
 
   showResults(`
     <div class="result-section">
-      <div class="result-section-title">Resultante de cargas</div>
-      <div class="eq-box">ΣFx_ext = ${R(SFx)}<br>ΣFy_ext = ${R(SFy)}<br>ΣM_${A.name} (cargas) = ${R(SM_A)}</div>
+      <div class="result-section-title">Resultante de cargas externas</div>
+      <div class="eq-box">ΣFx_ext = ${R(SFx)} ${unitLabel()}<br>ΣFy_ext = ${R(SFy)} ${unitLabel()}<br>ΣM_${A.name} (cargas) = ${R(SM_A)} ${unitLabel()}·m</div>
     </div>
     <div class="result-section">
-      <div class="result-section-title">Reacciones</div>
+      <div class="result-section-title">Reacciones del arco ${isBiarticulado?'(Triarticulado: con empuje horizontal)':''}</div>
       <table class="result-table">
-        <tr><th>Reacción</th><th>Valor</th><th>Dir.</th></tr>
-        <tr><td>R${A.name}x</td><td class="val">${R(RAx)}</td><td>→</td></tr>
-        <tr><td>R${A.name}y</td><td class="val">${R(RAy)}</td><td>↑</td></tr>
-        <tr><td>R${B.name}y</td><td class="val">${R(RBy)}</td><td>↑</td></tr>
+        <tr><th>Reacción</th><th>Valor (${unitLabel()})</th><th>Dirección</th></tr>
+        <tr><td>R${A.name}x</td><td class="val">${R(RAx)}</td><td>${RAx>=0?'→':'←'}</td></tr>
+        <tr><td>R${A.name}y</td><td class="val">${R(RAy)}</td><td>${RAy>=0?'↑':'↓'}</td></tr>
+        <tr><td>R${B.name}x</td><td class="val">${R(RBx)}</td><td>${RBx>=0?'→':'←'}</td></tr>
+        <tr><td>R${B.name}y</td><td class="val">${R(RBy)}</td><td>${RBy>=0?'↑':'↓'}</td></tr>
       </table>
+      ${isBiarticulado?`<div class="eq-box" style="margin-top:6px"><span class="eq-label">Empuje horizontal (Thrust H):</span> ${R(empujeH)} ${unitLabel()} (rótula en nodo ${rotula.name} (${rotula.x}, ${rotula.y}))</div>`:''}
     </div>
     <div class="result-section">
-      <div class="result-section-title">Verificación</div>
+      <div class="result-section-title">Verificación de equilibrio global</div>
       <div class="eq-box">
-        ΣFx = ${R(vFx)} ${Math.abs(vFx)<1e-6?'✓':'✗'}<br>
-        ΣFy = ${R(vFy)} ${Math.abs(vFy)<1e-6?'✓':'✗'}<br>
-        ΣM_${A.name} = ${R(vM)} ${Math.abs(vM)<1e-6?'✓':'✗'}
+        ΣFx = ${R(vFx)} ${unitLabel()} ${Math.abs(vFx)<1e-4?'✓':'✗'}<br>
+        ΣFy = ${R(vFy)} ${unitLabel()} ${Math.abs(vFy)<1e-4?'✓':'✗'}<br>
+        ΣM_${A.name} = ${R(vMA)} ${unitLabel()}·m ${Math.abs(vMA)<1e-4?'✓':'✗'}
       </div>
     </div>`);
 }
@@ -2543,7 +2632,7 @@ function calcNodos(){
     </div>`);
 }
 
-// ── Módulo 4: Método de Secciones ──
+// ── Módulo 4: Método de Secciones (Antigravity) ──
 function calcSecciones(){
   if(AppState.cutPoints.length<2){
     showResults('<div class="status-box status-warn">✂ Usa la herramienta de Corte para trazar una línea sobre la armadura, o selecciona las barras a cortar.</div>');
@@ -2563,13 +2652,11 @@ function calcSecciones(){
     const ni=AppState.nodos.find(n=>n.id===b.ni);
     const nj=AppState.nodos.find(n=>n.id===b.nj);
     if(!ni||!nj) return false;
-    const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
-    const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
-    return segIntersect(x1,y1,x2,y2,p1.sx,p1.sy,p2.sx,p2.sy);
+    return segIntersect(ni.x,ni.y,nj.x,nj.y,p1.x,p1.y,p2.x,p2.y);
   });
 
   if(cortadas.length===0){
-    showResults('<div class="status-box status-warn">⚠ La línea de corte no intersecta ninguna barra. Retraza el corte sobre las barras.</div>');
+    showResults('<div class="status-box status-warn">⚠ La línea de corte no intersecta ninguna barra. Retraza el corte sobre las barras de la armadura.</div>');
     return;
   }
   if(cortadas.length>3){
@@ -2578,17 +2665,38 @@ function calcSecciones(){
   }
 
   const rxCalc=calcReactions();
-  if(!rxCalc){ showResults('<div class="status-box status-error">⚠ No se pudieron calcular las reacciones.</div>'); return; }
+  if(!rxCalc){ showResults('<div class="status-box status-error">⚠ No se pudieron calcular las reacciones externas de la armadura.</div>'); return; }
 
-  const xCut=Math.min(p1.x,p2.x)+(Math.abs(p2.x-p1.x)/2);
-  const leftNodes=AppState.nodos.filter(n=>n.x<=xCut);
+  function sideLine(x, y){
+    return (p2.x - p1.x)*(y - p1.y) - (p2.y - p1.y)*(x - p1.x);
+  }
 
-  let LFx=0, LFy=0;
+  const sidePos=AppState.nodos.filter(n=>sideLine(n.x, n.y)>1e-7);
+  const sideNeg=AppState.nodos.filter(n=>sideLine(n.x, n.y)<-1e-7);
+
+  let leftNodes=sidePos;
+  if(leftNodes.length===0 || leftNodes.length===AppState.nodos.length){
+    leftNodes=sideNeg;
+  }
+  if(sidePos.length>0 && sideNeg.length>0){
+    const avgXPos=sidePos.reduce((s,n)=>s+n.x,0)/sidePos.length;
+    const avgXNeg=sideNeg.reduce((s,n)=>s+n.x,0)/sideNeg.length;
+    leftNodes=(avgXPos<=avgXNeg)?sidePos:sideNeg;
+  }
+
+  const leftIds=new Set(leftNodes.map(n=>n.id));
+  const xref=leftNodes[0]?.x||0, yref=leftNodes[0]?.y||0;
+
+  let LFx=0, LFy=0, LM_ref=0;
   leftNodes.forEach(nd=>{
     const rx=rxCalc.reacciones.find(r=>r.nodeId===nd.id);
-    if(rx){ LFx+=rx.fx||0; LFy+=rx.fy||0; }
-    AppState.cargas.filter(c=>c.elem===nd.id&&c.tipo==='Fx').forEach(c=>{
-      LFx+=c.fx||0; LFy+=c.fy||0;
+    if(rx){
+      LFx+=(rx.fx||0); LFy+=(rx.fy||0);
+      LM_ref+=((rx.fy||0)*(nd.x-xref)-(rx.fx||0)*(nd.y-yref));
+    }
+    AppState.cargas.filter(c=>c.elem===nd.id&&(c.tipo==='Fx'||c.tipo==='Fy')).forEach(c=>{
+      LFx+=(c.fx||0); LFy+=(c.fy||0);
+      LM_ref+=((c.fy||0)*(nd.x-xref)-(c.fx||0)*(nd.y-yref));
     });
   });
 
@@ -2600,73 +2708,68 @@ function calcSecciones(){
       resultados.push({id:b.id,nombre:(ni?ni.name:'?')+(nj?nj.name:'?'),fuerza:0});
     });
     AppState.resultados={...rxCalc,fuerzas:resultados};
-    showResults(`<div class="status-box status-info">ℹ Corte en ${cortadas.length} barra(s). Para resultado completo necesitas trazar el corte sobre exactamente 3 barras.</div>`);
+    showResults(`<div class="status-box status-info">ℹ Corte en ${cortadas.length} barra(s). Para un resultado determinado, el corte debe pasar exactamente por 3 barras no concurrentes.</div>`);
     return;
   }
 
-  const b1=cortadas[0], b2=cortadas[1], b3=cortadas[2];
-  const getCoef=(b,nd,xref,yref)=>{
+  const getCoef=(b)=>{
     const ni=AppState.nodos.find(n=>n.id===b.ni);
     const nj=AppState.nodos.find(n=>n.id===b.nj);
-    if(!ni||!nj) return {cx:0,cy:0,cm:0};
-    const dx=nj.x-ni.x, dy=nj.y-ni.y;
-    const L=Math.sqrt(dx*dx+dy*dy)||1;
+    if(!ni||!nj) return {cx:0,cy:0,cm:0,nom:'?'};
+    const inI=leftIds.has(ni.id);
+    const nRet=inI?ni:nj;
+    const nExt=inI?nj:ni;
+    const dx=nExt.x-nRet.x, dy=nExt.y-nRet.y;
+    const L=Math.hypot(dx,dy)||1;
     const cx=dx/L, cy=dy/L;
-    const mx=(ni.x+nj.x)/2, my=(ni.y+nj.y)/2;
-    const cm=cy*(mx-xref)-cx*(my-yref);
-    return {cx,cy,cm};
+    const cm=(nRet.x-xref)*cy-(nRet.y-yref)*cx;
+    const nom=nRet.name+nExt.name;
+    return {cx,cy,cm,nom};
   };
 
-  const xref=leftNodes[0]?.x||0, yref=leftNodes[0]?.y||0;
-  const c1=getCoef(b1,null,xref,yref);
-  const c2=getCoef(b2,null,xref,yref);
-  const c3=getCoef(b3,null,xref,yref);
-
-  const LM_ref=leftNodes.reduce((acc,nd)=>{
-    const rx=rxCalc.reacciones.find(r=>r.nodeId===nd.id);
-    let m=0;
-    if(rx){ m+=(rx.fy||0)*(nd.x-xref)-(rx.fx||0)*(nd.y-yref); }
-    AppState.cargas.filter(c=>c.elem===nd.id&&c.tipo==='Fx').forEach(c=>{
-      m+=(c.fy||0)*(nd.x-xref)-(c.fx||0)*(nd.y-yref);
-    });
-    return acc+m;
-  },0);
+  const b1=cortadas[0], b2=cortadas[1], b3=cortadas[2];
+  const c1=getCoef(b1), c2=getCoef(b2), c3=getCoef(b3);
 
   const A=[[c1.cx,c2.cx,c3.cx],[c1.cy,c2.cy,c3.cy],[c1.cm,c2.cm,c3.cm]];
   const bVec=[-LFx,-LFy,-LM_ref];
   const sol=gaussianN(A,bVec);
 
   if(!sol){
-    showResults('<div class="status-box status-error">⚠ Sistema singular. Las 3 barras son paralelas o concurrentes en un punto. Redefina el corte.</div>');
+    showResults('<div class="status-box status-error">⚠ Sistema singular. Las 3 barras cortadas son paralelas o concurrentes en un mismo punto. Redefina la línea de corte.</div>');
     return;
   }
 
   const [F1,F2,F3]=[sol[0],sol[1],sol[2]];
-  const getNom=(b)=>{
-    const ni=AppState.nodos.find(n=>n.id===b.ni);
-    const nj=AppState.nodos.find(n=>n.id===b.nj);
-    return (ni?ni.name:'?')+(nj?nj.name:'?');
-  };
   const fuerzas=[
-    {id:b1.id,nombre:getNom(b1),fuerza:F1},
-    {id:b2.id,nombre:getNom(b2),fuerza:F2},
-    {id:b3.id,nombre:getNom(b3),fuerza:F3}
+    {id:b1.id,nombre:c1.nom,fuerza:F1},
+    {id:b2.id,nombre:c2.nom,fuerza:F2},
+    {id:b3.id,nombre:c3.nom,fuerza:F3}
   ];
   AppState.resultados={...rxCalc,fuerzas};
 
   showResults(`
     <div class="result-section">
-      <div class="result-section-title">Barras cortadas</div>
+      <div class="result-section-title">Cuerpo libre aislado (Nodos: ${leftNodes.map(n=>n.name).join(', ')})</div>
+      <div class="eq-box">
+        ΣFx_ext = ${R(LFx)} ${unitLabel()}<br>
+        ΣFy_ext = ${R(LFy)} ${unitLabel()}<br>
+        ΣM (ref: ${leftNodes[0]?.name}) = ${R(LM_ref)} ${unitLabel()}·m
+      </div>
+    </div>
+    <div class="result-section">
+      <div class="result-section-title">Barras cortadas (esfuerzo axial)</div>
       <table class="result-table">
         <tr><th>Barra</th><th>F (${unitLabel()})</th><th>Estado</th></tr>
         ${fuerzas.map(f=>{
-          const st=Math.abs(f.fuerza)<1e-8?'zero':f.fuerza>0?'tension':'compress';
-          return `<tr><td>${f.nombre}</td><td class="${st}">${R(f.fuerza)}</td><td class="${st}">${Math.abs(f.fuerza)<1e-8?'0':f.fuerza>0?'T':'C'}</td></tr>`;
+          const abs=Math.abs(f.fuerza);
+          const st=abs<1e-8?'zero':f.fuerza>0?'tension':'compress';
+          const stLabel=abs<1e-8?'0':f.fuerza>0?'T (Tracción)':'C (Compresión)';
+          return `<tr><td>${f.nombre}</td><td class="${st}">${R(f.fuerza)}</td><td class="${st}">${stLabel}</td></tr>`;
         }).join('')}
       </table>
     </div>
     <div class="result-section">
-      <div class="result-section-title">Sistema de ecuaciones</div>
+      <div class="result-section-title">Sistema de ecuaciones 3×3</div>
       <div class="eq-box">
         <span class="eq-label">ΣFx = 0:</span> ${R(c1.cx)}·F1 + ${R(c2.cx)}·F2 + ${R(c3.cx)}·F3 = ${R(-LFx)}<br>
         <span class="eq-label">ΣFy = 0:</span> ${R(c1.cy)}·F1 + ${R(c2.cy)}·F2 + ${R(c3.cy)}·F3 = ${R(-LFy)}<br>
@@ -2847,7 +2950,7 @@ const EJEMPLOS={
   },
   2:()=>{
     clearAllSilent();
-    addN('A',0,0,'pin'); addN('B',8,0,'roller_h'); addN('C',4,3,'none');
+    addN('A',0,0,'pin'); addN('B',8,0,'pin'); addN('C',4,3,'none');
     addB('A','C'); addB('C','B');
     addCDist('AC',5);
     center();
@@ -3126,6 +3229,12 @@ function loadSession(e){
 // 13. EXPORTAR PDF
 // ══════════════════════════════════════════════════════════
 function exportPDF(){
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    showModal('Exportación PDF no disponible offline',
+      '<p style="color:var(--text-secondary);line-height:1.5">La librería <code>jsPDF</code> no se encuentra disponible (requiere conexión a internet para descargarse la primera vez desde el CDN).<br><br>Verifique su conexión a internet y recargue la página para habilitar la exportación del informe PDF.</p>',
+      null);
+    return;
+  }
   const {jsPDF}=window.jspdf;
   if(!AppState.resultados && AppState.nodos.length>0) calculate();
 
@@ -3457,10 +3566,6 @@ function exportPDF(){
 
 /* ============================================================================
    StructSolver v1.6.1 — Solucionador isostático por despiece + método GD de clase
-   CONVENCIONES:
-     Fx → +x (derecha) | Fy → +y (arriba) | M → + antihorario
-     Equilibrio: ΣF_reacciones + ΣF_extremos + ΣF_externas = 0
-     => [A] * {incógnitas} = -{cargas_externas}
    ============================================================================ */
 
 function hingeEndOfBar(bar, isSupport) {
@@ -3527,7 +3632,6 @@ function solveIsoFrame(nodos, barras, cargas) {
     else if (s === 'fixed') { add('fx', `R${nd.name}x`); add('fy', `R${nd.name}y`); add('m', `M${nd.name}`); }
   });
 
-  // Extremos de barra en TODOS los nudos (incluyendo apoyos cuando hay más de una barra o voladizo)
   const endIdx = {};
   barras.forEach(b => {
     endIdx[b.id] = {};
@@ -3550,7 +3654,6 @@ function solveIsoFrame(nodos, barras, cargas) {
     return { a, c, dx, dy, L };
   };
 
-  // --- 1. Ecuaciones de equilibrio por barra (3 por barra) ---
   for (const b of barras) {
     const { a, dx, dy, L } = barGeom(b);
     if (L < 1e-9) return { ok: false, message: `Barra ${b.id} de longitud nula.` };
@@ -3560,13 +3663,11 @@ function solveIsoFrame(nodos, barras, cargas) {
       if (E.fx != null) eFx.r[E.fx] += 1;
       if (E.fy != null) eFy.r[E.fy] += 1;
     });
-    // ΣM respecto a ni = 0: mi + mj + dx * fy_j - dy * fx_j + ΣM_cargas = 0
     if (Ei.m != null) eM.r[Ei.m] += 1;
     if (Ej.m != null) eM.r[Ej.m] += 1;
     if (Ej.fx != null) eM.r[Ej.fx] += -dy;
     if (Ej.fy != null) eM.r[Ej.fy] += dx;
 
-    // Cargas aplicadas SOBRE la barra (pasan al lado derecho con signo negativo)
     for (const cg of cargas.filter(x => x.elem === b.id && loadTarget(x, nodos) === 'bar')) {
       if (cg.tipo === 'dist' || cg.tipo === 'dist_tri') {
         const qi = cg.qi ?? cg.q ?? 0, qj = cg.qj ?? cg.q ?? 0;
@@ -3595,9 +3696,6 @@ function solveIsoFrame(nodos, barras, cargas) {
     }
   }
 
-  // --- 2. Ecuaciones de equilibrio en TODOS los nudos (3 por nudo) ---
-  // En cada nudo: R_apoyo - ΣF_extremos_barra + F_nodal_externa = 0
-  // => R_apoyo - ΣF_extremos_barra = -F_nodal_externa
   for (const nd of nodos) {
     const eFx = newEq(), eFy = newEq(), eM = newEq();
     const r = rxIdx[nd.id];
@@ -3653,9 +3751,6 @@ function solveIsoFrame(nodos, barras, cargas) {
     const th = Math.atan2(dy, dx), co = Math.cos(th), si = Math.sin(th);
     const fxi = val(Ei.fx), fyi = val(Ei.fy), mi = val(Ei.m);
     const fxj = val(Ej.fx), fyj = val(Ej.fy), mj = val(Ej.m);
-    // Convención de viga/pórtico:
-    // N > 0 tracción; V > 0 hace girar horario el elemento (en s=0: V0 = -fxi*sin + fyi*cos)
-    // M > 0 flexión con concavidad hacia +ŷ (sonrisa: en s=0: M0 = -mi)
     const dNi = { N: -(fxi * co + fyi * si), V: -fxi * si + fyi * co, M: -mi };
     const dNj = { N:  (fxj * co + fyj * si), V:  fxj * si - fyj * co, M:  mj };
     return { barId: b.id, L, th, dNi, dNj };
