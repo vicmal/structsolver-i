@@ -968,14 +968,12 @@ function solveWithRankReduction(A, b){
   const n = b.length;
   const activeIdx = [];
   const coupledInfo = [];
-  // Filtrar filas/columnas nulas o linealmente dependientes
   for(let i=0;i<n;i++){
     const rowNorm = Math.hypot(...A[i]);
     if(rowNorm < 1e-8){
       coupledInfo.push({ idx: i, reason: 'Fila nula en [δ] (inextensibilidad axial: sin deformación flexional asociada)' });
       continue;
     }
-    // Probar independencia lineal contra las filas ya activas
     const cand = [...activeIdx, i];
     const subA = cand.map(r => cand.map(c => A[r][c]));
     const subB = cand.map(r => b[r]);
@@ -1271,7 +1269,7 @@ function renderStackedBeamView(model){
       const qMax=Math.max(Math.abs(qi),Math.abs(qj),1e-6);
       const h0=28*Math.abs(qi)/qMax, h1=28*Math.abs(qj)/qMax;
       const qRef = Math.abs(qi)>=Math.abs(qj)?qi:qj;
-      const down = qRef <= 0; // down=true -> por encima apuntando hacia abajo
+      const down = qRef <= 0;
       const sgn = down ? 1 : -1;
       const steps=Math.max(6, Math.round((xb-xa)/16));
       for(let i=0;i<=steps;i++){
@@ -1780,7 +1778,6 @@ function drawDistLoad(b,qi,qj,tipo,la,lb,c,nodosList){
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
   const dv=c?dirVector(c,b):{dx:0,dy:1};
-  // Vector unitario en coordenadas SVG en la dirección de la fuerza (dy positivo -> arriba -> sy negativo)
   const sdx=dv.dx, sdy=-dv.dy;
   const n=8;
   const scaleArrow=30;
@@ -1793,7 +1790,6 @@ function drawDistLoad(b,qi,qj,tipo,la,lb,c,nodosList){
     const bx=x1+(x2-x1)*u;
     const by=y1+(y2-y1)*u;
     const L=alen(t)*sgn(t);
-    // Origen exterior -> punta en (bx, by)
     const ox=bx-sdx*L, oy=by-sdy*L;
     svgLine(ox,oy,bx,by,'#ff7b3d',1.5);
     if(Math.abs(L)>3){
@@ -2546,12 +2542,15 @@ function calcReactions(){
     const resList=Object.values(resMap);
 
     const pasos=[
-      {titulo:'Cargas externas',body:`ΣFx = ${R(SFx)} ${unitLabel()}\nΣFy = ${R(SFy)} ${unitLabel()}\nΣM_${ref.name} = ${R(SM)} ${unitLabel()}·m`},
+      {titulo:'Cargas externas',body:`ΣFx = ${R(SFx)} ${unitLabel()}
+ΣFy = ${R(SFy)} ${unitLabel()}
+ΣM_${ref.name} = ${R(SM)} ${unitLabel()}·m`},
       {titulo:'Reacciones calculadas',body:reactions.map((rx,i)=>{
         const unit=rx.dof==='m'?`${unitLabel()}·m`:unitLabel();
         const label=rx.dof==='fx'?`R${rx.name}x`:rx.dof==='fy'?`R${rx.name}y`:`M${rx.name}`;
         return `${label} = ${R(sol[i])} ${unit}`;
-      }).join('\n')}
+      }).join('
+')}
     ];
     return {reacciones:resList, pasos};
   }
@@ -3018,7 +3017,10 @@ function calcNodos(){
           resolved.add(b1.id); resolved.add(b2.id);
           const n1=AppState.nodos.find(no=>no.id===b1.ni);const n1j=AppState.nodos.find(no=>no.id===b1.nj);
           const n2=AppState.nodos.find(no=>no.id===b2.ni);const n2j=AppState.nodos.find(no=>no.id===b2.nj);
-          pasos.push({titulo:`Nodo ${nd.name}`,body:`ΣFx=0: ${R(c1x)}·F1 + ${R(c2x)}·F2 = ${R(SFx)}\nΣFy=0: ${R(c1y)}·F1 + ${R(c2y)}·F2 = ${R(SFy)}\nF${n1?n1.name:'?'}${n1j?n1j.name:'?'} = ${R(sol[0])}\nF${n2?n2.name:'?'}${n2j?n2j.name:'?'} = ${R(sol[1])}`});
+          pasos.push({titulo:`Nodo ${nd.name}`,body:`ΣFx=0: ${R(c1x)}·F1 + ${R(c2x)}·F2 = ${R(SFx)}
+ΣFy=0: ${R(c1y)}·F1 + ${R(c2y)}·F2 = ${R(SFy)}
+F${n1?n1.name:'?'}${n1j?n1j.name:'?'} = ${R(sol[0])}
+F${n2?n2.name:'?'}${n2j?n2j.name:'?'} = ${R(sol[1])}`});
         }
       }
     }
@@ -3044,13 +3046,15 @@ function calcNodos(){
   let pasosHTML=pasos.map(p=>`
     <div class="step-block" onclick="this.classList.toggle('open')">
       <div class="step-block-title">${p.titulo} <span>▸</span></div>
-      <div class="step-block-body">${p.body.replace(/\n/g,'<br>')}</div>
+      <div class="step-block-body">${p.body.replace(/
+/g,'<br>')}</div>
     </div>`).join('');
 
   showResults(`
     <div class="result-section">
       <div class="result-section-title">Reacciones externas</div>
-      ${rxCalc.pasos.map(p=>`<div class="eq-box">${p.body.replace(/\n/g,'<br>')}</div>`).join('')}
+      ${rxCalc.pasos.map(p=>`<div class="eq-box">${p.body.replace(/
+/g,'<br>')}</div>`).join('')}
     </div>
     <div class="result-section">
       <div class="result-section-title">Fuerzas en barras</div>
@@ -3252,7 +3256,11 @@ function calcPortico(){
   if(iso.ok){
     isoRes=iso;
     rxCalc={ reacciones: iso.reactions.map(r=>({nodeId:r.nodeId, fx:r.fx, fy:r.fy, m:r.m})),
-      pasos:[{titulo:'Sistema resuelto por despiece', body: iso.reactions.map(r=>'R'+r.name+'x = '+R(r.fx)+' '+unitLabel()+'\nR'+r.name+'y = '+R(r.fy)+' '+unitLabel()+(Math.abs(r.m)>1e-9?'\nM'+r.name+' = '+R(r.m)+' '+unitLabel()+'·m':'')).join('\n\n')}] };
+      pasos:[{titulo:'Sistema resuelto por despiece', body: iso.reactions.map(r=>'R'+r.name+'x = '+R(r.fx)+' '+unitLabel()+'
+R'+r.name+'y = '+R(r.fy)+' '+unitLabel()+(Math.abs(r.m)>1e-9?'
+M'+r.name+' = '+R(r.m)+' '+unitLabel()+'·m':'')).join('
+
+')}] };
   } else { rxCalc=calcReactions(); }
   if(!rxCalc){ showResults('<div class="status-box status-error">⚠ '+(iso.message||'No se pudieron calcular las reacciones. Verifique los apoyos.')+'</div>'); return; }
 
@@ -3296,10 +3304,8 @@ function calcPortico(){
 // 8B. MÓDULO 6 — ESTRUCTURA II (MÉTODO DE LAS FUERZAS)
 // ══════════════════════════════════════════════════════════
 
-// Enumera todos los candidatos liberables (vínculos externos e internos)
 function getRedundantCandidates(){
   const cands = [];
-  // 1. Vínculos externos liberables
   AppState.nodos.forEach(nd=>{
     if(nd.support==='fixed'){
       cands.push({ key:`N_${nd.id}_m`, kind:'ext_m', nodeId:nd.id, label:`M${nd.name} (Momento en empotramiento ${nd.name})`, shortLabel:`M${nd.name}`, unit:`${unitLabel()}·m`, dirDesc:'↺ antihorario' });
@@ -3314,7 +3320,6 @@ function getRedundantCandidates(){
       cands.push({ key:`N_${nd.id}_fx`, kind:'ext_fx', nodeId:nd.id, label:`R${nd.name}x (Reacción horizontal rodillo ${nd.name})`, shortLabel:`R${nd.name}x`, unit:unitLabel(), dirDesc:'→ derecha' });
     }
   });
-  // 2. Vínculos internos (insertar rótula en nudo rígido con k >= 2 barras)
   const isSup = id => { const n=AppState.nodos.find(x=>x.id===id); return n && n.support && n.support!=='none'; };
   AppState.barras.forEach(b=>{
     if(b.hinge || b.type==='truss') return;
@@ -3333,7 +3338,6 @@ function getRedundantCandidates(){
   return cands;
 }
 
-// Construye la Estructura Primaria (nodos y barras) al liberar un subconjunto de redundantes
 function buildPrimaryStructure(selectedCands){
   const pNodos = AppState.nodos.map(n=>({...n}));
   const pBarras = AppState.barras.map(b=>({...b}));
@@ -3367,7 +3371,6 @@ function buildPrimaryStructure(selectedCands){
   return { pNodos, pBarras };
 }
 
-// Genera las cargas virtuales unitarias X_i = 1 para cada redundante
 function buildVirtualLoads(cand, pNodos, pBarras){
   if(cand.kind==='ext_fx'){
     return [{ id:9001, elem:cand.nodeId, elemType:'node', tipo:'Fx', fx:1, fy:0 }];
@@ -3379,8 +3382,6 @@ function buildVirtualLoads(cand, pNodos, pBarras){
     return [{ id:9001, elem:cand.nodeId, elemType:'node', tipo:'M', m:1 }];
   }
   if(cand.kind==='int_hinge'){
-    // Par de momentos unitarios opuestos en la rótula interna recién creada:
-    // +1 en extremo de la barra articulada y -1 en el nudo adyacente
     const pos = cand.end==='ni' ? 0.0001 : 0.9999;
     return [
       { id:9001, elem:cand.barId, elemType:'bar', tipo:'M', m:1, pos },
@@ -3390,12 +3391,10 @@ function buildVirtualLoads(cand, pNodos, pBarras){
   return [];
 }
 
-// Selección automática combinatoria de r redundantes que garantizan estabilidad isostática primaria
 function autoSelectRedundants(GH){
   const cands = getRedundantCandidates();
   if(cands.length < GH) return null;
 
-  // Ordenar candidatos priorizando: 1) rodillos/reacciones laterales, 2) momentos en empotramientos, 3) rótulas internas
   const priority = c => c.kind==='ext_fx'?1 : c.kind==='ext_fy'?2 : c.kind==='ext_m'?3 : 4;
   const sorted = [...cands].sort((a,b)=>priority(a)-priority(b));
 
@@ -3447,7 +3446,6 @@ function integrateMohrPair(meA, cargasA, meB, cargasB, barrasList){
   return total;
 }
 
-// Panel de configuración previa (selección automática o manual de redundantes) en Módulo 6
 function renderMod6SetupPanel(){
   if(AppState.nodos.length===0){
     showResults('<div class="status-box status-info">ℹ Define la estructura hiperestática o usa "⚡ Ejemplo", luego presiona "▶ Calcular".</div>');
@@ -3592,11 +3590,10 @@ function calcMetodoFuerzas(){
   // 3. Ensamblar matriz de flexibilidad [EI * δ_ij] y vector [EI * Δ_i0] mediante Integrales de Mohr
   const deltaMat = Array.from({length:GH}, ()=>new Array(GH).fill(0));
   const delta0Vec = new Array(GH).fill(0);
-  const barContributions = {}; // para desglose pedagógico
+  const barContributions = {};
 
   for(let i=0; i<GH; i++){
     const vsI = virtualSystems[i];
-    // Desplazamiento libre Δ_i0
     let sum0 = 0;
     const contrib0 = [];
     pBarras.forEach(b=>{
@@ -3611,7 +3608,6 @@ function calcMetodoFuerzas(){
     delta0Vec[i] = sum0;
     barContributions[`D_${i+1}_0`] = contrib0;
 
-    // Flexibilidades δ_ij (simétrica)
     for(let j=i; j<GH; j++){
       const vsJ = virtualSystems[j];
       let sumIJ = 0;
@@ -3647,7 +3643,6 @@ function calcMetodoFuerzas(){
       finalRxMap[nd.id] = { nodeId: nd.id, name: nd.name, fx: 0, fy: 0, m: 0 };
     }
   });
-  // Sumar Sistema 0
   iso0.reactions.forEach(r=>{
     if(finalRxMap[r.nodeId]){
       finalRxMap[r.nodeId].fx += r.fx;
@@ -3655,7 +3650,6 @@ function calcMetodoFuerzas(){
       finalRxMap[r.nodeId].m  += r.m;
     }
   });
-  // Sumar X_i * Sistema i (reacciones en apoyos remanentes + el propio valor X_i en el vínculo liberado)
   for(let i=0; i<GH; i++){
     const vs = virtualSystems[i];
     const xi = X[i];
@@ -3673,7 +3667,7 @@ function calcMetodoFuerzas(){
   }
   const finalReactions = Object.values(finalRxMap);
 
-  // 6. Superposición de esfuerzos internos y diagramas finales por barra
+  // 6. Superposición de esfuerzos internos y diagramas finales por barra (evaluados punto a punto en s)
   const finalMemberEnds = iso0.memberEnds.map(me0=>{
     const dNi = { ...me0.dNi };
     const dNj = { ...me0.dNj };
@@ -3686,20 +3680,35 @@ function calcMetodoFuerzas(){
     return { barId: me0.barId, L: me0.L, th: me0.th, dNi, dNj };
   });
 
-  const finalDiagramas = diag0.map((d0, idx)=>{
-    const pts = d0.points.map((p0, pIdx)=>{
-      let v = p0.v, m = p0.m, n = p0.n;
-      for(let i=0; i<GH; i++){
-        const pI = virtualSystems[i].diagramas[idx].points[pIdx];
-        v += X[i]*pI.v;
-        m += X[i]*pI.m;
-        n += X[i]*pI.n;
-      }
-      return { t: p0.t, s: p0.s, v: R(v), m: R(m), n: R(n) };
-    });
+  const finalDiagramas = diag0.map((d0)=>{
     const meF = finalMemberEnds.find(x=>x.barId===d0.barId);
     const cgF = AppState.cargas.filter(c=>c.elem===d0.barId && loadTarget(c)==='bar');
     const eqF = memberEquations(meF, cgF, AppState.barras);
+
+    const tSet = new Set(d0.points.map(p=>p.t));
+    for(let i=0; i<GH; i++){
+      const dI = virtualSystems[i].diagramas.find(x=>x.barId===d0.barId);
+      if(dI) dI.points.forEach(p=>tSet.add(p.t));
+    }
+
+    const me0 = iso0.memberEnds.find(m=>m.barId===d0.barId);
+    const cg0 = AppState.cargas.filter(c=>c.elem===d0.barId && loadTarget(c, pNodos)==='bar');
+
+    const pts = [...tSet].sort((a,z)=>a-z).map(t=>{
+      const s = t * d0.L;
+      const f0 = internalForcesAt(me0, cg0, s, pBarras);
+      let v = f0.V, m = f0.M, n = f0.N;
+      for(let i=0; i<GH; i++){
+        const meI = virtualSystems[i].iso.memberEnds.find(x=>x.barId===d0.barId);
+        const cgI = virtualSystems[i].cargas.filter(c=>c.elem===d0.barId && loadTarget(c, pNodos)==='bar');
+        const fI = internalForcesAt(meI, cgI, s, pBarras);
+        v += X[i]*fI.V;
+        m += X[i]*fI.M;
+        n += X[i]*fI.N;
+      }
+      return { t, s, v: R(v), m: R(m), n: R(n) };
+    });
+
     return {
       ni: d0.ni, nj: d0.nj, barId: d0.barId, points: pts, L: d0.L,
       Vmax: Math.max(...pts.map(p=>Math.abs(p.v))),
@@ -3719,10 +3728,21 @@ function calcMetodoFuerzas(){
   });
   AppState.cargas.forEach(c=>{
     if(c.tipo==='Fx'||c.tipo==='Fy'){
-      const nd = AppState.nodos.find(n=>n.id===c.elem);
-      if(nd){
-        chkFx += (c.fx||0); chkFy += (c.fy||0);
-        chkM  += (c.fy||0)*(nd.x - refN.x) - (c.fx||0)*(nd.y - refN.y);
+      if(loadTarget(c)==='bar'){
+        const b = AppState.barras.find(x=>x.id===c.elem);
+        if(b){
+          const ni = AppState.nodos.find(n=>n.id===b.ni), nj = AppState.nodos.find(n=>n.id===b.nj);
+          const pos = c.pos ?? 0.5;
+          const px = ni.x + pos*(nj.x-ni.x), py = ni.y + pos*(nj.y-ni.y);
+          chkFx += (c.fx||0); chkFy += (c.fy||0);
+          chkM  += (c.fy||0)*(px - refN.x) - (c.fx||0)*(py - refN.y);
+        }
+      } else {
+        const nd = AppState.nodos.find(n=>n.id===c.elem);
+        if(nd){
+          chkFx += (c.fx||0); chkFy += (c.fy||0);
+          chkM  += (c.fy||0)*(nd.x - refN.x) - (c.fx||0)*(nd.y - refN.y);
+        }
       }
     } else if(c.tipo==='M'){
       chkM += (c.m||0);
@@ -3876,21 +3896,26 @@ function calculate(){
     return;
   }
   AppState.resultados=null;
-  switch(AppState.modulo){
-    case 1: calcEstabilidad(); break;
-    case 2: calcArco(); break;
-    case 3: calcNodos(); break;
-    case 4: calcSecciones(); break;
-    case 5: calcPortico(); break;
-    case 6: calcMetodoFuerzas(); break;
+  try{
+    switch(AppState.modulo){
+      case 1: calcEstabilidad(); break;
+      case 2: calcArco(); break;
+      case 3: calcNodos(); break;
+      case 4: calcSecciones(); break;
+      case 5: calcPortico(); break;
+      case 6: calcMetodoFuerzas(); break;
+    }
+    renderCanvas();
+    const badge=document.getElementById('results-badge');
+    badge.textContent='calculado';
+    badge.style.background='';
+    const sb=document.getElementById('stale-banner');
+    if(sb) sb.remove();
+    AppState._lastCalcSig=modelSig();
+  } catch(err){
+    console.error(err);
+    showResults(`<div class="status-box status-error">⚠ Error durante el cálculo: ${err.message}</div>`);
   }
-  renderCanvas();
-  const badge=document.getElementById('results-badge');
-  badge.textContent='calculado';
-  badge.style.background='';
-  const sb=document.getElementById('stale-banner');
-  if(sb) sb.remove();
-  AppState._lastCalcSig=modelSig();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -4151,7 +4176,8 @@ function copyTable(btn){
   const section=btn.closest('.result-section');
   const table=section.querySelector('.result-table');
   if(!table) return;
-  const rows=[...table.querySelectorAll('tr')].map(r=>[...r.querySelectorAll('th,td')].map(c=>c.textContent.trim()).join('\t')).join('\n');
+  const rows=[...table.querySelectorAll('tr')].map(r=>[...r.querySelectorAll('th,td')].map(c=>c.textContent.trim()).join('	')).join('
+');
   navigator.clipboard.writeText(rows).then(()=>{btn.textContent='✓ Copiado';setTimeout(()=>btn.textContent='📋 Copiar tabla',2000);});
 }
 
@@ -4170,7 +4196,7 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.targ
 // 12. GUARDAR / CARGAR SESIÓN
 // ══════════════════════════════════════════════════════════
 function saveSession(){
-  const data=JSON.stringify({version:'1.7.0',modulo:AppState.modulo,
+  const data=JSON.stringify({version:'1.7.1',modulo:AppState.modulo,
     nodos:AppState.nodos,barras:AppState.barras,cargas:AppState.cargas,
     config:AppState.config,
     mod6:{mode:AppState.mod6Mode, manualKeys:AppState.mod6ManualKeys},
@@ -4258,7 +4284,8 @@ function loadSession(e){
 
       center();
       renderCanvas(); updateTables(); updateStatusBar();
-    }catch(err){ alert('Error al cargar el archivo:\n'+err.message); }
+    }catch(err){ alert('Error al cargar el archivo:
+'+err.message); }
   };
   reader.readAsText(file);
   e.target.value='';
@@ -4607,7 +4634,7 @@ function exportPDF(){
 
 
 /* ============================================================================
-   StructSolver v1.7.0 — Solucionador isostático por despiece + método GD de clase
+   StructSolver v1.7.1 — Solucionador isostático por despiece + método GD de clase
    ============================================================================ */
 
 function hingeEndOfBar(bar, isSupport) {
@@ -5043,8 +5070,8 @@ function convPanelHTML(f){
     +'<div class="result-section-title">Conversión guiada a isostática</div>'
     +'<div class="eq-box" style="line-height:2">'
     +'<strong>Sobran '+f+' vínculo(s).</strong> Libera uno por vez y verifica que GD llegue a 0.<br>'
-    +(apoyos.length?'<span class="eq-label">A) Cambiar apoyo:</span> <select id="conv-apoyo-nodo">'+opAp+'</select> → <select id="conv-apoyo-tipo">'+targets(apoyos[0].support)+'</select> <button class="btn" onclick="convApply(\'apoyo\')">Aplicar</button><br>':'')
-    +(barras.length?'<span class="eq-label">B) Insertar rótula ⊣⊢:</span> <select id="conv-barra" onchange="convUpdExt(this.value)">'+opBa+'</select> en <select id="conv-extremo">'+opEx+'</select> <button class="btn" onclick="convApply(\'rotula\')">Aplicar</button><br>':'')
+    +(apoyos.length?'<span class="eq-label">A) Cambiar apoyo:</span> <select id="conv-apoyo-nodo">'+opAp+'</select> → <select id="conv-apoyo-tipo">'+targets(apoyos[0].support)+'</select> <button class="btn" onclick="convApply('apoyo')">Aplicar</button><br>':'')
+    +(barras.length?'<span class="eq-label">B) Insertar rótula ⊣⊢:</span> <select id="conv-barra" onchange="convUpdExt(this.value)">'+opBa+'</select> en <select id="conv-extremo">'+opEx+'</select> <button class="btn" onclick="convApply('rotula')">Aplicar</button><br>':'')
     +'<span class="eq-comment">C) Corte por sección: elimina una barra (libera 3). Hazlo desde la tabla de barras.</span><br>'
     +'<span class="eq-label">Liberaciones aplicadas: '+ConvState.hist.length+'</span> '
     +(ConvState.hist.length?'<button class="btn" onclick="convUndo()">↺ Deshacer última</button>':'')
