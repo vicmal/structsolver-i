@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StructSolver I — Análisis Estructural Estático</title>
+<title>StructSolver I — Análisis Estructural Estático e Hiperestático</title>
 <meta name="theme-color" content="#080814">
-<meta name="description" content="Análisis estructural estático: GD = 3N − V, conversión a isostática, reacciones, despiece y diagramas V/M/N.">
+<meta name="description" content="Análisis estructural: GD = 3N − V, conversión a isostática, reacciones, despiece, diagramas V/M/N y Método de las Fuerzas.">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
@@ -116,7 +116,7 @@ body {
 .tab-num {
   width: 18px; height: 18px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.12);
   font-size: 10px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 700;
@@ -144,7 +144,7 @@ body {
 /* ══ LAYOUT PRINCIPAL ══ */
 #main {
   display: grid;
-  grid-template-columns: 280px 1fr 310px;
+  grid-template-columns: 280px 1fr 330px;
   flex: 1;
   overflow: hidden;
 }
@@ -432,7 +432,7 @@ body {
   padding: 12px 16px;
 }
 
-.result-section { margin-bottom: 20px; }
+.result-section { margin-bottom: 18px; }
 .result-section-title {
   font-size: 10px;
   color: var(--accent-cyan);
@@ -444,9 +444,9 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.result-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
-.result-table th { color: var(--text-muted); padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 600; border-bottom: 1px solid var(--border); }
-.result-table td { padding: 6px 8px; border-bottom: 1px solid rgba(30,30,64,0.5); font-family: var(--font-mono); }
+.result-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
+.result-table th { color: var(--text-muted); padding: 5px 6px; text-align: left; font-size: 10px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.result-table td { padding: 5px 6px; border-bottom: 1px solid rgba(30,30,64,0.5); font-family: var(--font-mono); }
 .result-table .val { color: var(--accent-yellow); }
 .result-table .tension { color: var(--accent-blue); font-weight: 600; }
 .result-table .compress { color: var(--accent-red); font-weight: 600; }
@@ -460,7 +460,7 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   margin-bottom: 8px;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--text-primary);
 }
 .eq-box .eq-comment { color: var(--text-muted); font-size: 10px; }
@@ -492,6 +492,12 @@ body {
 .step-block-title { font-weight: 600; color: var(--accent-blue); margin-bottom: 4px; display: flex; justify-content: space-between; }
 .step-block-body { color: var(--text-secondary); font-family: var(--font-mono); line-height: 1.6; display: none; margin-top: 6px; }
 .step-block.open .step-block-body { display: block; }
+
+.red-chk-row {
+  display: flex; align-items: center; gap: 7px; padding: 4px 0;
+  font-size: 11px; color: var(--text-primary); border-bottom: 1px solid rgba(30,30,64,0.4);
+}
+.red-chk-row input[type="checkbox"] { accent-color: var(--accent-cyan); cursor: pointer; }
 
 /* ══ BARRA DE ESTADO INFERIOR ══ */
 #statusbar {
@@ -561,13 +567,14 @@ body {
   z-index: 10;
   flex-wrap: wrap;
   justify-content: flex-end;
+  max-width: 56%;
 }
 #diagram-controls.visible { display: flex; }
 .diag-toggle {
-  padding: 5px 11px;
+  padding: 5px 10px;
   border-radius: 12px;
   border: 1px solid;
-  background: rgba(15,15,32,0.88);
+  background: rgba(15,15,32,0.9);
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
@@ -584,6 +591,8 @@ body {
 .diag-toggle.stk.active { background: rgba(0,229,255,0.25); }
 .diag-toggle.inv { border-color: #ffd740; color: #ffd740; }
 .diag-toggle.inv.active { background: rgba(255,215,64,0.22); }
+.diag-toggle.st { border-color: #ff4dd2; color: #ff4dd2; }
+.diag-toggle.st.active { background: rgba(255,77,210,0.24); }
 
 /* ══ EMPTY STATE ══ */
 #empty-state {
@@ -615,7 +624,7 @@ body {
     </svg>
     <div id="logo-text">
       <div class="name">StructSolver I</div>
-      <div class="sub">Análisis Estructural Estático</div>
+      <div class="sub">Análisis Estructural Estático e Hiperestático</div>
     </div>
   </div>
 
@@ -635,8 +644,8 @@ body {
     <button class="tab-btn" data-mod="5" onclick="switchModule(5)">
       <span class="tab-num">5</span> Pórtico Isostático
     </button>
-    <button class="tab-btn disabled" title="Próximamente: Estructuras hiperestáticas">
-      <span class="tab-num" style="background:rgba(255,255,255,0.05)">6</span> Estructura II ✦
+    <button class="tab-btn" data-mod="6" onclick="switchModule(6)" title="Estructuras hiperestáticas — Método de las Fuerzas">
+      <span class="tab-num">6</span> Estructura II (Fuerzas) ✦
     </button>
   </div>
 
@@ -728,7 +737,7 @@ body {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Modo de vista (Módulo 5)</label>
+        <label class="form-label">Modo de vista (Módulos 5 y 6)</label>
         <select class="form-select" id="cfg-view-mode" onchange="setViewMode(this.value)">
           <option value="stacked" selected>Apilado (Sistema + DFC + DMF)</option>
           <option value="overlay">Superpuesto sobre estructura</option>
@@ -742,7 +751,7 @@ body {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Escala diagramas (Módulo 5)</label>
+        <label class="form-label">Escala diagramas (Módulos 5 y 6)</label>
         <input type="range" id="cfg-diag-scale" min="0.1" max="5" step="0.1" value="1" style="width:100%" oninput="diagScale=+this.value; renderCanvas()">
       </div>
     </div>
@@ -776,6 +785,7 @@ body {
     </div>
 
     <div id="diagram-controls">
+      <span id="mod6-state-btns" style="display:none; gap:4px; flex-wrap:wrap;"></span>
       <button class="diag-toggle stk active" id="btn-view-stacked" onclick="toggleStackedView()" title="Vista apilada: Sistema + DFC + DMF">📊 Apilado (DFC/DMF)</button>
       <button class="diag-toggle inv active" id="btn-inv-m" onclick="toggleInvertM()" title="Invertir signo gráfico de M (+ abajo)">↕ +M abajo</button>
       <button class="diag-toggle v active" onclick="toggleDiag('V')">V</button>
@@ -869,7 +879,7 @@ body {
 const AppState = {
   modulo: 1,
   nodos: [],      // {id, name, x, y, support:'none'|'pin'|'roller_h'|'roller_v'|'fixed'}
-  barras: [],     // {id, ni, nj, type:'truss'|'frame'}
+  barras: [],     // {id, ni, nj, type:'truss'|'frame', hinge?:bool, hingeEnd?:'ni'|'nj'}
   cargas: [],     // {id, elem, elemType, tipo:'Fx'|'Fy'|'M'|'dist'|'dist_tri', fx, fy, m, q, qi, qj, a, b, dir, ang, pos}
   resultados: null,
   config: { units:'kN_m', dec:3, grid:1 },
@@ -888,6 +898,10 @@ const AppState = {
   viewMode: 'stacked', // 'stacked' (Sistema + DFC + DMF) | 'overlay'
   invertM: true,       // true: +M hacia abajo (convención fibra traccionada)
   diagScale: 1,
+  // Estado Módulo 6 (Método de las Fuerzas)
+  mod6Mode: 'auto',    // 'auto' | 'manual'
+  mod6ManualKeys: [],  // array de keys de redundantes elegidas manualmente
+  mod6ViewState: 'real', // 'real' | 'sys0' | 'sys1' | ...
   _nodeCounter: 0,
   _barCounter: 0,
   _loadCounter: 0,
@@ -928,6 +942,7 @@ function cramer3(A,b){
 }
 function gaussianN(A,b){
   const n=b.length;
+  if(n===0) return [];
   const M=A.map((r,i)=>[...r,b[i]]);
   for(let col=0;col<n;col++){
     let maxR=col;
@@ -947,6 +962,38 @@ function gaussianN(A,b){
   }
   return x;
 }
+
+// Eliminación Gaussiana con detección de rango (para sistemas con acoplamiento axial en flexión pura)
+function solveWithRankReduction(A, b){
+  const n = b.length;
+  const activeIdx = [];
+  const coupledInfo = [];
+  // Filtrar filas/columnas nulas o linealmente dependientes
+  for(let i=0;i<n;i++){
+    const rowNorm = Math.hypot(...A[i]);
+    if(rowNorm < 1e-8){
+      coupledInfo.push({ idx: i, reason: 'Fila nula en [δ] (inextensibilidad axial: sin deformación flexional asociada)' });
+      continue;
+    }
+    // Probar independencia lineal contra las filas ya activas
+    const cand = [...activeIdx, i];
+    const subA = cand.map(r => cand.map(c => A[r][c]));
+    const subB = cand.map(r => b[r]);
+    if(gaussianN(subA, subB) !== null){
+      activeIdx.push(i);
+    } else {
+      coupledInfo.push({ idx: i, reason: 'Dependiente axialmente de otra redundante (acoplamiento cinemático en flexión pura)' });
+    }
+  }
+  const subA = activeIdx.map(r => activeIdx.map(c => A[r][c]));
+  const subB = activeIdx.map(r => b[r]);
+  const subSol = gaussianN(subA, subB);
+  if(!subSol) return null;
+  const X = new Array(n).fill(0);
+  activeIdx.forEach((origIdx, k) => { X[origIdx] = subSol[k]; });
+  return { X, activeIdx, coupledInfo };
+}
+
 function R(v){ const d=+document.getElementById('cfg-dec').value||3; return Math.abs(v)<1e-8?0:+v.toFixed(d); }
 
 // ══════════════════════════════════════════════════════════
@@ -990,6 +1037,7 @@ function xToFrac(barId,x){
   return Math.min(1,Math.max(0,t));
 }
 
+// Convención unificada: en modo 'vertical', +q apunta hacia arriba (+y) y -q apunta hacia abajo (-y)
 function dirVector(c,b){
   const dir=c.dir||'vertical';
   if(dir==='horizontal') return {dx:1,dy:0};
@@ -1004,14 +1052,54 @@ function dirVector(c,b){
     const th=Math.atan2(nj.y-ni.y,nj.x-ni.x);
     return {dx:-Math.sin(th),dy:Math.cos(th)};
   }
-  const qRef = (c.qi ?? c.q ?? 0) !== 0 ? (c.qi ?? c.q ?? 0) : (c.qj ?? 0);
-  return {dx:0, dy: qRef < 0 ? 1 : -1};
+  return {dx:0, dy:1};
 }
 
-function isCollinearHorizontalBeam(){
-  if(AppState.nodos.length<2 || AppState.barras.length<1) return false;
-  const y0=AppState.nodos[0].y;
-  return AppState.nodos.every(n=>Math.abs(n.y-y0)<1e-6);
+function isCollinearHorizontalBeam(nodosList){
+  const ns = nodosList || AppState.nodos;
+  if(ns.length<2 || AppState.barras.length<1) return false;
+  const y0=ns[0].y;
+  return ns.every(n=>Math.abs(n.y-y0)<1e-6);
+}
+
+// Determina qué modelo (nodos, barras, cargas, reacciones, diagramas) dibujar según el estado activo en Módulo 6
+function getActiveRenderModel(){
+  if(AppState.modulo===6 && AppState.resultados && AppState.resultados.mod6){
+    const m6 = AppState.resultados.mod6;
+    const st = AppState.mod6ViewState || 'real';
+    if(st === 'sys0' && m6.sys0){
+      return {
+        nodos: m6.sys0.nodos,
+        barras: m6.sys0.barras,
+        cargas: AppState.cargas,
+        reacciones: m6.sys0.reacciones,
+        diagramas: m6.sys0.diagramas,
+        stateTag: 'SISTEMA 0 (PRIMARIO)'
+      };
+    }
+    if(st.startsWith('sys')){
+      const idx = parseInt(st.slice(3), 10) - 1;
+      if(m6.virtualSystems && m6.virtualSystems[idx]){
+        const vs = m6.virtualSystems[idx];
+        return {
+          nodos: vs.nodos,
+          barras: vs.barras,
+          cargas: vs.cargas,
+          reacciones: vs.reacciones,
+          diagramas: vs.diagramas,
+          stateTag: `SISTEMA ${idx+1} (${vs.label}=1)`
+        };
+      }
+    }
+  }
+  return {
+    nodos: AppState.nodos,
+    barras: AppState.barras,
+    cargas: AppState.cargas,
+    reacciones: AppState.resultados ? AppState.resultados.reacciones : null,
+    diagramas: AppState.resultados ? AppState.resultados.diagramas : null,
+    stateTag: 'SISTEMA INICIAL'
+  };
 }
 
 function renderCanvas(){
@@ -1024,13 +1112,15 @@ function renderCanvas(){
   const emptyState=document.getElementById('empty-state');
   if(emptyState) emptyState.style.display=AppState.nodos.length?'none':'flex';
 
-  if(AppState.modulo===5 && AppState.viewMode==='stacked' && AppState.resultados && AppState.resultados.diagramas && isCollinearHorizontalBeam()){
-    renderStackedBeamView();
+  const model = getActiveRenderModel();
+
+  if((AppState.modulo===5 || AppState.modulo===6) && AppState.viewMode==='stacked' && model.diagramas && isCollinearHorizontalBeam(model.nodos)){
+    renderStackedBeamView(model);
     return;
   }
 
   drawGrid();
-  AppState.barras.forEach(b=>drawBar(b));
+  model.barras.forEach(b=>drawBar(b, model.nodos));
 
   if(AppState.drawingBar && AppState._barPreview){
     const {sx:x1,sy:y1}=toSVG(AppState._barPreview.x1,AppState._barPreview.y1);
@@ -1044,25 +1134,31 @@ function renderCanvas(){
     svgLine(s1.sx,s1.sy,s2.sx,s2.sy,'rgba(255,215,0,0.85)',2,'6,4');
   }
 
-  AppState.cargas.forEach(c=>drawLoad(c));
+  model.cargas.forEach(c=>drawLoad(c, model.nodos, model.barras));
 
-  if(AppState.resultados && AppState.resultados.reacciones){
-    AppState.resultados.reacciones.forEach(r=>drawReaction(r));
+  if(model.reacciones){
+    model.reacciones.forEach(r=>drawReaction(r, model.nodos));
   }
 
-  if(AppState.modulo===5 && AppState.resultados && AppState.resultados.diagramas){
-    AppState.resultados.diagramas.forEach(d=>drawDiagram(d));
+  if((AppState.modulo===5 || AppState.modulo===6) && model.diagramas){
+    model.diagramas.forEach(d=>drawDiagram(d, model.nodos));
   }
 
-  AppState.nodos.forEach(n=>drawNode(n));
-  AppState.barras.forEach(b=>drawBarLabel(b));
+  model.nodos.forEach(n=>drawNode(n));
+  model.barras.forEach(b=>drawBarLabel(b, model.nodos));
 }
 
 // ── VISTA APILADA DE 3 NIVELES (Sistema Inicial + DFC + DMF) ──
-function renderStackedBeamView(){
+function renderStackedBeamView(model){
   drawGrid();
 
-  const xs=AppState.nodos.map(n=>n.x);
+  const nsList = model.nodos;
+  const bsList = model.barras;
+  const csList = model.cargas;
+  const rxList = model.reacciones;
+  const dgList = model.diagramas;
+
+  const xs=nsList.map(n=>n.x);
   const xMin=Math.min(...xs), xMax=Math.max(...xs);
   const spanX=Math.max(1, xMax-xMin);
   const padL=95, padR=65;
@@ -1079,7 +1175,7 @@ function renderStackedBeamView(){
   const ulM=ul==='kN'?'kN·m':(ul==='t'?'t·m':'kips·ft');
 
   // 1. Líneas guía verticales desde cada nodo a través de los 3 niveles
-  const sortedNodes=[...AppState.nodos].sort((a,b)=>a.x-b.x);
+  const sortedNodes=[...nsList].sort((a,b)=>a.x-b.x);
   sortedNodes.forEach(n=>{
     const sx=mapX(n.x);
     svgLine(sx, ySys-48, sx, yDMF+bandH+18, 'rgba(77,159,255,0.28)', 1, '4,4');
@@ -1105,13 +1201,14 @@ function renderStackedBeamView(){
     svgText((xFirst+xLast)/2, yDimTot-7, `${R(spanX)} m`, '#4d9fff', 10, 'middle');
   }
 
-  // 3. NIVEL 1: SISTEMA INICIAL (Viga, apoyos, cargas por encima y reacciones)
-  svgText(38, ySys-18, 'SISTEMA', '#00e5ff', 10, 'middle');
-  svgText(38, ySys-6, 'INICIAL', '#00e5ff', 10, 'middle');
+  // 3. NIVEL 1: SISTEMA INICIAL
+  const tagParts = (model.stateTag || 'SISTEMA INICIAL').split(' ');
+  svgText(42, ySys-18, tagParts[0]||'SISTEMA', '#00e5ff', 9.5, 'middle');
+  svgText(42, ySys-6, tagParts.slice(1).join(' ')||'INICIAL', '#00e5ff', 9.5, 'middle');
 
-  AppState.barras.forEach(b=>{
-    const ni=AppState.nodos.find(n=>n.id===b.ni);
-    const nj=AppState.nodos.find(n=>n.id===b.nj);
+  bsList.forEach(b=>{
+    const ni=nsList.find(n=>n.id===b.ni);
+    const nj=nsList.find(n=>n.id===b.nj);
     if(!ni||!nj) return;
     const x1=mapX(ni.x), x2=mapX(nj.x);
     svgLine(x1, ySys, x2, ySys, '#e8e8f4', 4);
@@ -1124,19 +1221,19 @@ function renderStackedBeamView(){
     }
   });
 
-  // Cargas en sistema inicial
-  AppState.cargas.forEach(c=>{
-    const tgt=loadTarget(c);
+  // Cargas en sistema inicial (q < 0 hacia abajo por encima; q > 0 hacia arriba por debajo)
+  csList.forEach(c=>{
+    const tgt=loadTarget(c, nsList);
     if(c.tipo==='Fx'||c.tipo==='Fy'){
       let sx=0;
       if(tgt==='node'){
-        const n=AppState.nodos.find(no=>no.id===c.elem);
+        const n=nsList.find(no=>no.id===c.elem);
         if(!n) return;
         sx=mapX(n.x);
       } else {
-        const b=AppState.barras.find(ba=>ba.id===c.elem);
+        const b=bsList.find(ba=>ba.id===c.elem);
         if(!b) return;
-        const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+        const ni=nsList.find(x=>x.id===b.ni), nj=nsList.find(x=>x.id===b.nj);
         sx=mapX(ni.x+(nj.x-ni.x)*(c.pos??0.5));
       }
       if(c.fy&&c.fy!==0){
@@ -1153,43 +1250,46 @@ function renderStackedBeamView(){
     } else if(c.tipo==='M'){
       let sx=0;
       if(tgt==='node'){
-        const n=AppState.nodos.find(no=>no.id===c.elem);
+        const n=nsList.find(no=>no.id===c.elem);
         if(!n) return;
         sx=mapX(n.x);
       } else {
-        const b=AppState.barras.find(ba=>ba.id===c.elem);
+        const b=bsList.find(ba=>ba.id===c.elem);
         if(!b) return;
-        const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+        const ni=nsList.find(x=>x.id===b.ni), nj=nsList.find(x=>x.id===b.nj);
         sx=mapX(ni.x+(nj.x-ni.x)*(c.pos??0.5));
       }
       drawMoment(sx, ySys, c.m, '#ff4dd2');
     } else if(c.tipo==='dist'||c.tipo==='dist_tri'){
-      const b=AppState.barras.find(ba=>ba.id===c.elem);
+      const b=bsList.find(ba=>ba.id===c.elem);
       if(!b) return;
-      const ni=AppState.nodos.find(n=>n.id===b.ni), nj=AppState.nodos.find(n=>n.id===b.nj);
+      const ni=nsList.find(n=>n.id===b.ni), nj=nsList.find(n=>n.id===b.nj);
       const la=c.a??0, lb=c.b??1;
       const xa=mapX(ni.x+(nj.x-ni.x)*la), xb=mapX(ni.x+(nj.x-ni.x)*lb);
-      const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
+      const dv=dirVector(c,b);
+      const qi=(c.qi??c.q??0)*dv.dy, qj=(c.qj??c.q??0)*dv.dy;
       const qMax=Math.max(Math.abs(qi),Math.abs(qj),1e-6);
       const h0=28*Math.abs(qi)/qMax, h1=28*Math.abs(qj)/qMax;
-      const sgn0=qi<=0?1:-1, sgn1=qj<=0?1:-1;
+      const qRef = Math.abs(qi)>=Math.abs(qj)?qi:qj;
+      const down = qRef <= 0; // down=true -> por encima apuntando hacia abajo
+      const sgn = down ? 1 : -1;
       const steps=Math.max(6, Math.round((xb-xa)/16));
       for(let i=0;i<=steps;i++){
         const t=i/steps;
         const px=xa+(xb-xa)*t;
         const h=h0+(h1-h0)*t;
-        const sgn=(qi+(qj-qi)*t)<=0?1:-1;
         if(h>1){
           svgLine(px, ySys-sgn*h, px, ySys-sgn*2, '#00e676', 1.3);
           const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
-          poly.setAttribute('points', sgn>0?`${px},${ySys-2} ${px-2.5},${ySys-7} ${px+2.5},${ySys-7}`:`${px},${ySys+2} ${px-2.5},${ySys+7} ${px+2.5},${ySys+7}`);
+          poly.setAttribute('points', down?`${px},${ySys-2} ${px-2.5},${ySys-7} ${px+2.5},${ySys-7}`:`${px},${ySys+2} ${px-2.5},${ySys+7} ${px+2.5},${ySys+7}`);
           poly.setAttribute('fill','#00e676');
           svg.appendChild(poly);
         }
       }
-      svgLine(xa, ySys-sgn0*h0, xb, ySys-sgn1*h1, '#00e676', 1.6);
+      svgLine(xa, ySys-sgn*h0, xb, ySys-sgn*h1, '#00e676', 1.6);
       const lbl=qi===qj?`${R(Math.abs(qi))} ${ul}/m`:`${R(Math.abs(qi))}→${R(Math.abs(qj))} ${ul}/m`;
-      svgText((xa+xb)/2, ySys-Math.max(h0,h1)-10, lbl, '#00e676', 10, 'middle');
+      const yLbl = down ? (ySys-Math.max(h0,h1)-10) : (ySys+Math.max(h0,h1)+12);
+      svgText((xa+xb)/2, yLbl, lbl, '#00e676', 10, 'middle');
     }
   });
 
@@ -1206,9 +1306,9 @@ function renderStackedBeamView(){
     svgText(sx-12, ySys+12, n.name.toLowerCase(), '#e8e8f4', 11, 'middle');
   });
 
-  if(AppState.resultados && AppState.resultados.reacciones){
-    AppState.resultados.reacciones.forEach(r=>{
-      const n=AppState.nodos.find(no=>no.id===r.nodeId);
+  if(rxList){
+    rxList.forEach(r=>{
+      const n=nsList.find(no=>no.id===r.nodeId);
       if(!n) return;
       const sx=mapX(n.x);
       if(Math.abs(r.fy)>1e-8){
@@ -1222,11 +1322,14 @@ function renderStackedBeamView(){
         svg.appendChild(poly);
         svgText(sx-22, yBase-4, `${R(r.fy)} ${ul}`, '#ff4d6d', 10, 'middle');
       }
+      if(r.m && Math.abs(r.m)>1e-8){
+        drawMoment(sx, ySys, r.m, '#00e676');
+      }
     });
   }
 
   // 4. NIVEL 2: DIAGRAMA DE FUERZA CORTANTE (DFC / V)
-  const allV=AppState.resultados.diagramas.flatMap(d=>d.points.map(p=>Math.abs(p.v)));
+  const allV=dgList.flatMap(d=>d.points.map(p=>Math.abs(p.v)));
   const maxV=Math.max(1e-6, ...allV);
   const scV=bandH/maxV;
 
@@ -1238,9 +1341,9 @@ function renderStackedBeamView(){
   svgText(padL+usableW+20, yDFC, '0', '#ff4d6d', 10, 'start');
 
   if(AppState.showV){
-    AppState.resultados.diagramas.forEach(d=>{
-      const ni=AppState.nodos.find(n=>n.id===d.ni);
-      const nj=AppState.nodos.find(n=>n.id===d.nj);
+    dgList.forEach((d, idx)=>{
+      const ni=nsList.find(n=>n.id===d.ni);
+      const nj=nsList.find(n=>n.id===d.nj);
       if(!ni||!nj) return;
       const x1=mapX(ni.x), x2=mapX(nj.x);
       const polyPts=d.points.map(p=>`${x1+(x2-x1)*p.t},${yDFC - p.v*scV}`);
@@ -1254,13 +1357,14 @@ function renderStackedBeamView(){
       svg.appendChild(poly);
 
       const p0=d.points[0], pEnd=d.points[d.points.length-1];
+      const stagger = (x2 - x1 < 75) ? (idx % 2 === 0 ? -4 : 8) : 0;
       if(Math.abs(p0.v)>1e-6){
         const yOff=p0.v>0?-11:13;
-        svgText(x1+14, yDFC - p0.v*scV + yOff, `${R(Math.abs(p0.v))} ${ul}`, '#ff7b3d', 9.5, 'start');
+        svgText(x1+6, yDFC - p0.v*scV + yOff + stagger, `${R(Math.abs(p0.v))} ${ul}`, '#ff7b3d', 9, 'start');
       }
-      if(Math.abs(pEnd.v)>1e-6){
+      if(Math.abs(pEnd.v)>1e-6 && Math.abs(pEnd.v - p0.v)>1e-4){
         const yOff=pEnd.v>0?-11:13;
-        svgText(x2-6, yDFC - pEnd.v*scV + yOff, `${R(Math.abs(pEnd.v))} ${ul}`, '#ff7b3d', 9.5, 'end');
+        svgText(x2-6, yDFC - pEnd.v*scV + yOff - stagger, `${R(Math.abs(pEnd.v))} ${ul}`, '#ff7b3d', 9, 'end');
       }
       const pMid=d.points[Math.floor(d.points.length/2)];
       if(Math.abs(pMid.v)>maxV*0.08){
@@ -1270,7 +1374,7 @@ function renderStackedBeamView(){
   }
 
   // 5. NIVEL 3: DIAGRAMA DE MOMENTO FLECTOR (DMF / M)
-  const allM=AppState.resultados.diagramas.flatMap(d=>d.points.map(p=>Math.abs(p.m)));
+  const allM=dgList.flatMap(d=>d.points.map(p=>Math.abs(p.m)));
   const maxM=Math.max(1e-6, ...allM);
   const scM=bandH/maxM;
   const mDir = AppState.invertM ? 1 : -1;
@@ -1283,9 +1387,9 @@ function renderStackedBeamView(){
   svgText(padL+usableW+20, yDMF, '0', '#ff4d6d', 10, 'start');
 
   if(AppState.showM){
-    AppState.resultados.diagramas.forEach(d=>{
-      const ni=AppState.nodos.find(n=>n.id===d.ni);
-      const nj=AppState.nodos.find(n=>n.id===d.nj);
+    dgList.forEach((d, idx)=>{
+      const ni=nsList.find(n=>n.id===d.ni);
+      const nj=nsList.find(n=>n.id===d.nj);
       if(!ni||!nj) return;
       const x1=mapX(ni.x), x2=mapX(nj.x);
       const polyPts=d.points.map(p=>`${x1+(x2-x1)*p.t},${yDMF + mDir*p.m*scM}`);
@@ -1299,13 +1403,14 @@ function renderStackedBeamView(){
       svg.appendChild(poly);
 
       const p0=d.points[0], pEnd=d.points[d.points.length-1];
+      const stagger = (x2 - x1 < 75) ? (idx % 2 === 0 ? -5 : 9) : 0;
       if(Math.abs(p0.m)>1e-6){
         const py0=yDMF + mDir*p0.m*scM;
-        svgText(x1+14, py0 + (mDir*p0.m<0?-10:12), `${R(Math.abs(p0.m))} ${ulM}`, '#ff7b3d', 9.5, 'start');
+        svgText(x1+6, py0 + (mDir*p0.m<0?-10:12) + stagger, `${R(Math.abs(p0.m))} ${ulM}`, '#ff7b3d', 9, 'start');
       }
       if(Math.abs(pEnd.m)>1e-6){
         const pyE=yDMF + mDir*pEnd.m*scM;
-        svgText(x2-6, pyE + (mDir*pEnd.m<0?-10:12), `${R(Math.abs(pEnd.m))} ${ulM}`, '#ff7b3d', 9.5, 'end');
+        svgText(x2-6, pyE + (mDir*pEnd.m<0?-10:12) - stagger, `${R(Math.abs(pEnd.m))} ${ulM}`, '#ff7b3d', 9, 'end');
       }
       for(let i=1;i<d.points.length-1;i++){
         const prev=d.points[i-1], cur=d.points[i], next=d.points[i+1];
@@ -1313,7 +1418,7 @@ function renderStackedBeamView(){
           const pxS=x1+(x2-x1)*cur.t;
           const pyS=yDMF + mDir*cur.m*scM;
           svgLine(pxS, yDMF, pxS, pyS, 'rgba(255,215,64,0.6)', 1, '3,3');
-          svgText(pxS, pyS + (mDir*cur.m<0?-10:12), `${R(Math.abs(cur.m))} ${ulM}`, '#ffd740', 9.5, 'middle');
+          svgText(pxS, pyS + (mDir*cur.m<0?-11:13), `${R(Math.abs(cur.m))} ${ulM}`, '#ffd740', 9, 'middle');
           break;
         }
       }
@@ -1474,9 +1579,10 @@ function drawSupport(g,sx,sy,type){
   }
 }
 
-function drawBar(b){
-  const ni=AppState.nodos.find(n=>n.id===b.ni);
-  const nj=AppState.nodos.find(n=>n.id===b.nj);
+function drawBar(b, nodosList){
+  const ns = nodosList || AppState.nodos;
+  const ni=ns.find(n=>n.id===b.ni);
+  const nj=ns.find(n=>n.id===b.nj);
   if(!ni||!nj) return;
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
@@ -1557,9 +1663,10 @@ function drawBar(b){
   svg.appendChild(g);
 }
 
-function drawBarLabel(b){
-  const ni=AppState.nodos.find(n=>n.id===b.ni);
-  const nj=AppState.nodos.find(n=>n.id===b.nj);
+function drawBarLabel(b, nodosList){
+  const ns = nodosList || AppState.nodos;
+  const ni=ns.find(n=>n.id===b.ni);
+  const nj=ns.find(n=>n.id===b.nj);
   if(!ni||!nj) return;
   const mx=(ni.x+nj.x)/2, my=(ni.y+nj.y)/2;
   const {sx,sy}=toSVG(mx,my);
@@ -1576,21 +1683,23 @@ function drawBarLabel(b){
   }
 }
 
-function drawLoad(c){
-  const tgt=loadTarget(c);
+function drawLoad(c, nodosList, barrasList){
+  const ns = nodosList || AppState.nodos;
+  const bs = barrasList || AppState.barras;
+  const tgt=loadTarget(c, ns);
   if(c.tipo==='Fx'||c.tipo==='Fy'){
     if(tgt==='node'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
+      const n=ns.find(no=>no.id===c.elem);
       if(!n) return;
       const {sx,sy}=toSVG(n.x,n.y);
       if(c.fx&&c.fx!==0) drawArrow(sx,sy,c.fx,0,'#ff7b3d',c.fx);
       if(c.fy&&c.fy!==0) drawArrow(sx,sy,0,c.fy,'#ff7b3d',c.fy);
       return;
     }
-    const b=AppState.barras.find(ba=>ba.id===c.elem);
+    const b=bs.find(ba=>ba.id===c.elem);
     if(!b) return;
     const t=(c.pos==null?0.5:c.pos);
-    const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+    const ni=ns.find(x=>x.id===b.ni), nj=ns.find(x=>x.id===b.nj);
     if(!ni||!nj) return;
     const {sx:x1,sy:y1}=toSVG(ni.x,ni.y), {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
     const sx=x1+(x2-x1)*t, sy=y1+(y2-y1)*t;
@@ -1598,25 +1707,25 @@ function drawLoad(c){
     if(c.fy&&c.fy!==0) drawArrow(sx,sy,0,c.fy,'#ff7b3d',c.fy);
   } else if(c.tipo==='M'){
     if(tgt==='node'){
-      const n=AppState.nodos.find(no=>no.id===c.elem);
+      const n=ns.find(no=>no.id===c.elem);
       if(!n) return;
       const {sx,sy}=toSVG(n.x,n.y); drawMoment(sx,sy,c.m); return;
     }
-    const b=AppState.barras.find(ba=>ba.id===c.elem);
+    const b=bs.find(ba=>ba.id===c.elem);
     if(!b) return;
     const t=(c.pos==null?0.5:c.pos);
-    const ni=AppState.nodos.find(x=>x.id===b.ni), nj=AppState.nodos.find(x=>x.id===b.nj);
+    const ni=ns.find(x=>x.id===b.ni), nj=ns.find(x=>x.id===b.nj);
     if(!ni||!nj) return;
     const {sx:x1,sy:y1}=toSVG(ni.x,ni.y), {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
     drawMoment(x1+(x2-x1)*t,y1+(y2-y1)*t,c.m);
   } else if(c.tipo==='dist'){
-    const b=AppState.barras.find(ba=>ba.id===c.elem);
+    const b=bs.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b,c);
+    drawDistLoad(b,c.q,c.q,'uniform',c.a,c.b,c,ns);
   } else if(c.tipo==='dist_tri'){
-    const b=AppState.barras.find(ba=>ba.id===c.elem);
+    const b=bs.find(ba=>ba.id===c.elem);
     if(!b) return;
-    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b,c);
+    drawDistLoad(b,c.qi,c.qj,'triangular',c.a,c.b,c,ns);
   }
 }
 
@@ -1636,8 +1745,9 @@ function drawArrow(sx,sy,fx,fy,color,val){
   svgText(ex+dx*0.3,ey+dy*0.3,`${R(val)}`,color,10,'middle');
 }
 
-function drawReaction(r){
-  const n=AppState.nodos.find(no=>no.id===r.nodeId);
+function drawReaction(r, nodosList){
+  const ns = nodosList || AppState.nodos;
+  const n=ns.find(no=>no.id===r.nodeId);
   if(!n) return;
   const {sx,sy}=toSVG(n.x,n.y);
   if(Math.abs(r.fx)>1e-8) drawArrow(sx,sy,r.fx,0,'#00e676',R(r.fx));
@@ -1660,15 +1770,17 @@ function drawMoment(sx,sy,val,color){
   svgText(sx,sy-r-10,`M=${R(val)}`,color,10,'middle');
 }
 
-// Dibuja la carga distribuida apoyada por encima de la barra con flechas apuntando hacia ella
-function drawDistLoad(b,qi,qj,tipo,la,lb,c){
-  const ni=AppState.nodos.find(n=>n.id===b.ni);
-  const nj=AppState.nodos.find(n=>n.id===b.nj);
+// Dibuja la carga distribuida con puntas de flecha tocando la barra en la dirección física exacta
+function drawDistLoad(b,qi,qj,tipo,la,lb,c,nodosList){
+  const ns = nodosList || AppState.nodos;
+  const ni=ns.find(n=>n.id===b.ni);
+  const nj=ns.find(n=>n.id===b.nj);
   if(!ni||!nj) return;
   la=(la==null?0:la); lb=(lb==null?1:lb);
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
-  const dv=c?dirVector(c,b):{dx:0,dy:-1};
+  const dv=c?dirVector(c,b):{dx:0,dy:1};
+  // Vector unitario en coordenadas SVG en la dirección de la fuerza (dy positivo -> arriba -> sy negativo)
   const sdx=dv.dx, sdy=-dv.dy;
   const n=8;
   const scaleArrow=30;
@@ -1681,6 +1793,7 @@ function drawDistLoad(b,qi,qj,tipo,la,lb,c){
     const bx=x1+(x2-x1)*u;
     const by=y1+(y2-y1)*u;
     const L=alen(t)*sgn(t);
+    // Origen exterior -> punta en (bx, by)
     const ox=bx-sdx*L, oy=by-sdy*L;
     svgLine(ox,oy,bx,by,'#ff7b3d',1.5);
     if(Math.abs(L)>3){
@@ -1699,16 +1812,19 @@ function drawDistLoad(b,qi,qj,tipo,la,lb,c){
   const L0=alen(0)*sgn(0), L1=alen(1)*sgn(1);
   svgLine(xa-sdx*L0,ya-sdy*L0,xb-sdx*L1,yb-sdy*L1,'#ff7b3d',1.5);
   const dirLbl=c&&c.dir&&c.dir!=='vertical'?({horizontal:' ←→',perp:' ⟂',angle:' ∠'+(c.ang||0)+'°'}[c.dir]||''):'';
-  const yLbl=Math.min(ya-sdy*L0, yb-sdy*L1)-10;
+  const yTop=Math.min(ya-sdy*L0, yb-sdy*L1);
+  const yBot=Math.max(ya-sdy*L0, yb-sdy*L1);
+  const yLbl = (yTop < Math.min(ya,yb)-2) ? yTop-10 : yBot+12;
   svgText((xa+xb)/2-(sdx*(L0+L1))/2, yLbl, `q=${R(qi)}${qi!==qj?'→'+R(qj):''}${dirLbl}`,
           '#ff7b3d',10,'middle');
 }
 
-function drawDiagram(d){
+function drawDiagram(d, nodosList){
   if(!d.points||d.points.length<2) return;
+  const ns = nodosList || AppState.nodos;
   const sc=diagScale*AppState.zoom*0.04;
-  const ni=AppState.nodos.find(n=>n.id===d.ni);
-  const nj=AppState.nodos.find(n=>n.id===d.nj);
+  const ni=ns.find(n=>n.id===d.ni);
+  const nj=ns.find(n=>n.id===d.nj);
   if(!ni||!nj) return;
   const {sx:x1,sy:y1}=toSVG(ni.x,ni.y);
   const {sx:x2,sy:y2}=toSVG(nj.x,nj.y);
@@ -1960,12 +2076,12 @@ function ctxAction(action){
       `<div class="modal-row"><label>Tipo</label>
         <select id="m-dtype"><option value="dist">Uniforme</option><option value="dist_tri">Triangular</option></select>
        </div>
-       <div class="modal-row"><label>q inicial (${unitLabel()}/m)</label><input id="m-qi" type="number" step="0.5" value="5"></div>
+       <div class="modal-row"><label>q inicial (${unitLabel()}/m, +↑ / −↓)</label><input id="m-qi" type="number" step="0.5" value="-5"></div>
        <div class="modal-row"><label>q final (solo triangular)</label><input id="m-qj" type="number" step="0.5" value="0"></div>
        <div class="modal-row"><label>Dirección</label>
         <select id="m-qdir" onchange="document.getElementById('m-qang-row').style.display=this.value==='angle'?'block':'none';">
-          <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
-          <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
+          <option value="vertical">Vertical (+ arriba / − abajo)</option>
+          <option value="horizontal">Horizontal (+ derecha / − izquierda)</option>
           <option value="perp">Perpendicular a la barra</option>
           <option value="angle">Ángulo personalizado</option>
         </select>
@@ -2155,6 +2271,9 @@ function updateTables(){
     ltbody.appendChild(tr);
   });
   checkStale();
+  if(AppState.modulo===6 && !AppState.resultados){
+    renderMod6SetupPanel();
+  }
 }
 
 function updateNode(id,key,val){
@@ -2163,6 +2282,7 @@ function updateNode(id,key,val){
   n[key]=val;
   AppState.resultados=null;
   renderCanvas(); updateStatusBar();
+  if(AppState.modulo===6) renderMod6SetupPanel();
 }
 function deleteNode(id){
   AppState.nodos=AppState.nodos.filter(n=>n.id!==id);
@@ -2235,17 +2355,17 @@ function addLoadForm(){
        <div class="modal-row"><label>M (+antihorario)</label><input id="m-lm" type="number" step="1" value="0"></div>
      </div>
      <div id="lf-dist" style="display:none">
-       <div class="modal-row"><label>q (${unitLabel()}/m)</label><input id="m-lq" type="number" step="0.5" value="5"></div>
+       <div class="modal-row"><label>q (${unitLabel()}/m, +↑ / −↓)</label><input id="m-lq" type="number" step="0.5" value="-5"></div>
      </div>
      <div id="lf-tri" style="display:none">
-       <div class="modal-row"><label>q inicial</label><input id="m-lqi" type="number" step="0.5" value="5"></div>
-       <div class="modal-row"><label>q final</label><input id="m-lqj" type="number" step="0.5" value="0"></div>
+       <div class="modal-row"><label>q inicial (+↑ / −↓)</label><input id="m-lqi" type="number" step="0.5" value="-5"></div>
+       <div class="modal-row"><label>q final (+↑ / −↓)</label><input id="m-lqj" type="number" step="0.5" value="0"></div>
      </div>
      <div id="lf-dir" style="display:none">
        <div class="modal-row"><label>Dirección</label>
          <select id="m-ldir" onchange="document.getElementById('m-lang-row').style.display=this.value==='angle'?'block':'none';">
-           <option value="vertical">Vertical ↓ (q&gt;0 hacia abajo)</option>
-           <option value="horizontal">Horizontal → (q&gt;0 a la derecha)</option>
+           <option value="vertical">Vertical (+ arriba / − abajo)</option>
+           <option value="horizontal">Horizontal (+ derecha / − izquierda)</option>
            <option value="perp">Perpendicular a la barra</option>
            <option value="angle">Ángulo personalizado</option>
          </select>
@@ -2338,7 +2458,7 @@ function toggleQMode(){
 }
 
 // ══════════════════════════════════════════════════════════
-// 8. MÓDULOS DE CÁLCULO
+// 8. MÓDULOS DE CÁLCULO (1 AL 5)
 // ══════════════════════════════════════════════════════════
 
 function calcReactions(){
@@ -3089,6 +3209,42 @@ function calcSecciones(){
     </div>`);
 }
 
+// ── Helper: construir puntos de diagramas para cualquier solución isoRes ──
+function buildDiagramasFromIso(isoRes, nodosList, barrasList, cargasList){
+  const diagramas = [];
+  if(!isoRes || !isoRes.memberEnds) return diagramas;
+  isoRes.memberEnds.forEach(me=>{
+    const b = barrasList.find(x=>x.id===me.barId);
+    if(!b) return;
+    const cargasB = cargasList.filter(c=>c.elem===me.barId && loadTarget(c, nodosList)==='bar');
+    const eq = memberEquations(me, cargasB, barrasList);
+    const tSet = new Set([0,0.25,0.5,0.75,1.0]);
+    for(let i=1;i<24;i++) tSet.add(i/24);
+    if(eq.sStar!=null) tSet.add(eq.sStar/me.L);
+    (eq.bounds||[]).forEach(x=>tSet.add(x/me.L));
+    cargasB.forEach(c=>{
+      if(c.pos!=null){
+        tSet.add(Math.max(0,c.pos-1e-4));
+        tSet.add(c.pos);
+        tSet.add(Math.min(1,c.pos+1e-4));
+      }
+    });
+    const pts = [...tSet].sort((a,z)=>a-z).map(t=>{
+      const s = t*me.L;
+      const {V,M,N} = internalForcesAt(me, cargasB, s, barrasList);
+      return {t, s, v:R(V), m:R(M), n:R(N)};
+    });
+    diagramas.push({
+      ni: b.ni, nj: b.nj, barId: me.barId, points: pts, L: me.L,
+      Vmax: Math.max(...pts.map(p=>Math.abs(p.v))),
+      Mmax: Math.max(...pts.map(p=>Math.abs(p.m))),
+      Nmax: Math.max(...pts.map(p=>Math.abs(p.n))),
+      eqV: eq.eqV, eqM: eq.eqM
+    });
+  });
+  return diagramas;
+}
+
 // ── Módulo 5: Pórtico Isostático ──
 function calcPortico(){
   const iso=solveIsoFrame(AppState.nodos, AppState.barras, AppState.cargas);
@@ -3100,80 +3256,7 @@ function calcPortico(){
   } else { rxCalc=calcReactions(); }
   if(!rxCalc){ showResults('<div class="status-box status-error">⚠ '+(iso.message||'No se pudieron calcular las reacciones. Verifique los apoyos.')+'</div>'); return; }
 
-  const diagramas=[];
-  if(isoRes && isoRes.memberEnds){
-    isoRes.memberEnds.forEach(me=>{
-      const b=AppState.barras.find(x=>x.id===me.barId);
-      if(!b) return;
-      const cargasB=AppState.cargas.filter(c=>c.elem===me.barId && loadTarget(c)==='bar');
-      const eq=memberEquations(me,cargasB);
-      const tSet=new Set([0,0.25,0.5,0.75,1.0]);
-      for(let i=1;i<24;i++) tSet.add(i/24);
-      if(eq.sStar!=null) tSet.add(eq.sStar/me.L);
-      (eq.bounds||[]).forEach(x=>tSet.add(x/me.L));
-      cargasB.forEach(c=>{
-        if(c.pos!=null){
-          tSet.add(Math.max(0,c.pos-1e-4));
-          tSet.add(c.pos);
-          tSet.add(Math.min(1,c.pos+1e-4));
-        }
-      });
-      const pts=[...tSet].sort((a,z)=>a-z).map(t=>{
-        const s=t*me.L;
-        const {V,M,N}=internalForcesAt(me,cargasB,s);
-        return {t,v:R(V),m:R(M),n:R(N)};
-      });
-      diagramas.push({ni:b.ni,nj:b.nj,barId:me.barId,points:pts,L:me.L,
-        Vmax:Math.max(...pts.map(p=>Math.abs(p.v))),
-        Mmax:Math.max(...pts.map(p=>Math.abs(p.m))),
-        Nmax:Math.max(...pts.map(p=>Math.abs(p.n))),
-        eqV:eq.eqV,eqM:eq.eqM});
-    });
-  } else {
-    AppState.barras.forEach(b=>{
-      const ni=AppState.nodos.find(n=>n.id===b.ni);
-      const nj=AppState.nodos.find(n=>n.id===b.nj);
-      if(!ni||!nj) return;
-      const L=getBarLength(b);
-      const loadsBarra=AppState.cargas.filter(c=>c.elem===b.id && loadTarget(c)==='bar');
-      const rxI=rxCalc.reacciones.find(r=>r.nodeId===ni.id);
-      const cargsI=AppState.cargas.filter(c=>c.elem===ni.id&&c.tipo==='Fx'&&loadTarget(c)==='node');
-
-      let V0=(rxI?.fy||0)+cargsI.reduce((s,c)=>s+(c.fy||0),0);
-      let N0=-(rxI?.fx||0)-cargsI.reduce((s,c)=>s+(c.fx||0),0);
-      let M0=0;
-
-      const tPoints=new Set([0,0.25,0.5,0.75,1.0]);
-      for(let i=1;i<24;i++) tPoints.add(i/24);
-      loadsBarra.forEach(c=>{ if(c.pos) tPoints.add(c.pos); });
-
-      const pts=[...tPoints].sort().map(t=>{
-        const x=t*L;
-        let V=V0, M=M0, N=N0;
-        loadsBarra.forEach(c=>{
-          if(c.tipo==='dist'||c.tipo==='dist_tri'){
-            const dv=dirVector(c,b);
-            const qi=(c.qi??c.q??0)*dv.dy, qj=(c.qj??c.q??0)*dv.dy;
-            if(x>0){
-              V+=qi*x+(qj-qi)*x*x/(2*L);
-              M+=qi*x*x/2+(qj-qi)*x*x*x/(6*L);
-            }
-          } else if(c.tipo==='Fx' && c.pos && x>=c.pos*L){
-            V+=c.fy||0;
-            M+=(c.fy||0)*(x-c.pos*L);
-          }
-        });
-        return {t,v:R(V),m:R(M),n:R(N)};
-      });
-
-      diagramas.push({ni:ni.id,nj:nj.id,points:pts,
-        Vmax:Math.max(...pts.map(p=>Math.abs(p.v))),
-        Mmax:Math.max(...pts.map(p=>Math.abs(p.m))),
-        Nmax:Math.max(...pts.map(p=>Math.abs(p.n))),
-      });
-    });
-  }
-
+  const diagramas = isoRes ? buildDiagramasFromIso(isoRes, AppState.nodos, AppState.barras, AppState.cargas) : [];
   AppState.resultados={...rxCalc,diagramas,isoDespiece:isoRes?isoRes.memberEnds:null,isoNodes:isoRes?isoRes.nodeChecks:null};
 
   let reactHTML=`<table class="result-table"><tr><th>Reacción</th><th>Valor (${unitLabel()})</th></tr>`;
@@ -3210,6 +3293,581 @@ function calcPortico(){
 }
 
 // ══════════════════════════════════════════════════════════
+// 8B. MÓDULO 6 — ESTRUCTURA II (MÉTODO DE LAS FUERZAS)
+// ══════════════════════════════════════════════════════════
+
+// Enumera todos los candidatos liberables (vínculos externos e internos)
+function getRedundantCandidates(){
+  const cands = [];
+  // 1. Vínculos externos liberables
+  AppState.nodos.forEach(nd=>{
+    if(nd.support==='fixed'){
+      cands.push({ key:`N_${nd.id}_m`, kind:'ext_m', nodeId:nd.id, label:`M${nd.name} (Momento en empotramiento ${nd.name})`, shortLabel:`M${nd.name}`, unit:`${unitLabel()}·m`, dirDesc:'↺ antihorario' });
+      cands.push({ key:`N_${nd.id}_fx`, kind:'ext_fx', nodeId:nd.id, label:`R${nd.name}x (Reacción horizontal en ${nd.name})`, shortLabel:`R${nd.name}x`, unit:unitLabel(), dirDesc:'→ derecha' });
+      cands.push({ key:`N_${nd.id}_fy`, kind:'ext_fy', nodeId:nd.id, label:`R${nd.name}y (Reacción vertical en ${nd.name})`, shortLabel:`R${nd.name}y`, unit:unitLabel(), dirDesc:'↑ arriba' });
+    } else if(nd.support==='pin'){
+      cands.push({ key:`N_${nd.id}_fx`, kind:'ext_fx', nodeId:nd.id, label:`R${nd.name}x (Reacción horizontal en ${nd.name})`, shortLabel:`R${nd.name}x`, unit:unitLabel(), dirDesc:'→ derecha' });
+      cands.push({ key:`N_${nd.id}_fy`, kind:'ext_fy', nodeId:nd.id, label:`R${nd.name}y (Reacción vertical en ${nd.name})`, shortLabel:`R${nd.name}y`, unit:unitLabel(), dirDesc:'↑ arriba' });
+    } else if(nd.support==='roller_h'){
+      cands.push({ key:`N_${nd.id}_fy`, kind:'ext_fy', nodeId:nd.id, label:`R${nd.name}y (Reacción vertical rodillo ${nd.name})`, shortLabel:`R${nd.name}y`, unit:unitLabel(), dirDesc:'↑ arriba' });
+    } else if(nd.support==='roller_v'){
+      cands.push({ key:`N_${nd.id}_fx`, kind:'ext_fx', nodeId:nd.id, label:`R${nd.name}x (Reacción horizontal rodillo ${nd.name})`, shortLabel:`R${nd.name}x`, unit:unitLabel(), dirDesc:'→ derecha' });
+    }
+  });
+  // 2. Vínculos internos (insertar rótula en nudo rígido con k >= 2 barras)
+  const isSup = id => { const n=AppState.nodos.find(x=>x.id===id); return n && n.support && n.support!=='none'; };
+  AppState.barras.forEach(b=>{
+    if(b.hinge || b.type==='truss') return;
+    const ni=AppState.nodos.find(n=>n.id===b.ni), nj=AppState.nodos.find(n=>n.id===b.nj);
+    if(!ni||!nj) return;
+    const bName = ni.name + nj.name;
+    if(!isSup(b.ni)){
+      const degI = AppState.barras.filter(x=>x.ni===b.ni||x.nj===b.ni).length;
+      if(degI >= 2) cands.push({ key:`B_${b.id}_ni`, kind:'int_hinge', barId:b.id, end:'ni', nodeId:b.ni, label:`M_${bName}(${ni.name}) (Rótula en ${ni.name} de ${bName})`, shortLabel:`M_${ni.name}(${bName})`, unit:`${unitLabel()}·m`, dirDesc:'flexión interna' });
+    }
+    if(!isSup(b.nj)){
+      const degJ = AppState.barras.filter(x=>x.ni===b.nj||x.nj===b.nj).length;
+      if(degJ >= 2) cands.push({ key:`B_${b.id}_nj`, kind:'int_hinge', barId:b.id, end:'nj', nodeId:b.nj, label:`M_${bName}(${nj.name}) (Rótula en ${nj.name} de ${bName})`, shortLabel:`M_${nj.name}(${bName})`, unit:`${unitLabel()}·m`, dirDesc:'flexión interna' });
+    }
+  });
+  return cands;
+}
+
+// Construye la Estructura Primaria (nodos y barras) al liberar un subconjunto de redundantes
+function buildPrimaryStructure(selectedCands){
+  const pNodos = AppState.nodos.map(n=>({...n}));
+  const pBarras = AppState.barras.map(b=>({...b}));
+  const freeFx = new Set(), freeFy = new Set(), freeM = new Set();
+
+  selectedCands.forEach(c=>{
+    if(c.kind==='ext_fx') freeFx.add(c.nodeId);
+    else if(c.kind==='ext_fy') freeFy.add(c.nodeId);
+    else if(c.kind==='ext_m')  freeM.add(c.nodeId);
+    else if(c.kind==='int_hinge'){
+      const b = pBarras.find(x=>x.id===c.barId);
+      if(b){ b.hinge = true; b.hingeEnd = c.end; }
+    }
+  });
+
+  pNodos.forEach(nd=>{
+    const s = nd.support;
+    if(!s || s==='none') return;
+    let hasFx = (s==='pin'||s==='roller_v'||s==='fixed') && !freeFx.has(nd.id);
+    let hasFy = (s==='pin'||s==='roller_h'||s==='fixed') && !freeFy.has(nd.id);
+    let hasM  = (s==='fixed') && !freeM.has(nd.id);
+
+    if(!hasFx && !hasFy && !hasM) nd.support = 'none';
+    else if(hasFx && hasFy && hasM) nd.support = 'fixed';
+    else if(hasFx && hasFy && !hasM) nd.support = 'pin';
+    else if(!hasFx && hasFy && !hasM) nd.support = 'roller_h';
+    else if(hasFx && !hasFy && !hasM) nd.support = 'roller_v';
+    else nd.support = 'none';
+  });
+
+  return { pNodos, pBarras };
+}
+
+// Genera las cargas virtuales unitarias X_i = 1 para cada redundante
+function buildVirtualLoads(cand, pNodos, pBarras){
+  if(cand.kind==='ext_fx'){
+    return [{ id:9001, elem:cand.nodeId, elemType:'node', tipo:'Fx', fx:1, fy:0 }];
+  }
+  if(cand.kind==='ext_fy'){
+    return [{ id:9001, elem:cand.nodeId, elemType:'node', tipo:'Fx', fx:0, fy:1 }];
+  }
+  if(cand.kind==='ext_m'){
+    return [{ id:9001, elem:cand.nodeId, elemType:'node', tipo:'M', m:1 }];
+  }
+  if(cand.kind==='int_hinge'){
+    // Par de momentos unitarios opuestos en la rótula interna recién creada:
+    // +1 en extremo de la barra articulada y -1 en el nudo adyacente
+    const pos = cand.end==='ni' ? 0.0001 : 0.9999;
+    return [
+      { id:9001, elem:cand.barId, elemType:'bar', tipo:'M', m:1, pos },
+      { id:9002, elem:cand.nodeId, elemType:'node', tipo:'M', m:-1 }
+    ];
+  }
+  return [];
+}
+
+// Selección automática combinatoria de r redundantes que garantizan estabilidad isostática primaria
+function autoSelectRedundants(GH){
+  const cands = getRedundantCandidates();
+  if(cands.length < GH) return null;
+
+  // Ordenar candidatos priorizando: 1) rodillos/reacciones laterales, 2) momentos en empotramientos, 3) rótulas internas
+  const priority = c => c.kind==='ext_fx'?1 : c.kind==='ext_fy'?2 : c.kind==='ext_m'?3 : 4;
+  const sorted = [...cands].sort((a,b)=>priority(a)-priority(b));
+
+  function search(startIdx, chosen){
+    if(chosen.length === GH){
+      const { pNodos, pBarras } = buildPrimaryStructure(chosen);
+      const test = solveIsoFrame(pNodos, pBarras, []);
+      if(test.ok) return chosen;
+      return null;
+    }
+    for(let i=startIdx; i <= sorted.length - (GH - chosen.length); i++){
+      const res = search(i+1, [...chosen, sorted[i]]);
+      if(res) return res;
+    }
+    return null;
+  }
+  return search(0, []);
+}
+
+// Cuadratura de Gauss-Legendre de 3 puntos (exacta para polinomios hasta grado 5)
+function integrateMohrPair(meA, cargasA, meB, cargasB, barrasList){
+  const L = meA.L;
+  const bSet = new Set([0, L]);
+  const addBounds = list => (list||[]).forEach(cg=>{
+    if(cg.tipo==='dist'||cg.tipo==='dist_tri'){ bSet.add((cg.a??0)*L); bSet.add((cg.b??1)*L); }
+    else if(cg.tipo==='Fx'||cg.tipo==='Fy'||cg.tipo==='M'){ if(cg.pos!=null) bSet.add(cg.pos*L); }
+  });
+  addBounds(cargasA);
+  addBounds(cargasB);
+  const bounds = [...bSet].filter(x=>x>=-1e-9 && x<=L+1e-9).map(x=>Math.min(L,Math.max(0,x))).sort((x,y)=>x-y);
+  const segs = [bounds[0]];
+  for(const x of bounds) if(x - segs[segs.length-1] > 1e-7) segs.push(x);
+
+  const gPts = [-Math.sqrt(3/5), 0, Math.sqrt(3/5)];
+  const gWts = [5/9, 8/9, 5/9];
+  let total = 0;
+
+  for(let i=0; i<segs.length-1; i++){
+    const sa = segs[i], sb = segs[i+1];
+    const half = (sb - sa)/2, mid = (sa + sb)/2;
+    if(half < 1e-11) continue;
+    for(let k=0; k<3; k++){
+      const s = mid + half * gPts[k];
+      const mA = internalForcesAt(meA, cargasA, s, barrasList).M;
+      const mB = internalForcesAt(meB, cargasB, s, barrasList).M;
+      total += half * gWts[k] * (mA * mB);
+    }
+  }
+  return total;
+}
+
+// Panel de configuración previa (selección automática o manual de redundantes) en Módulo 6
+function renderMod6SetupPanel(){
+  if(AppState.nodos.length===0){
+    showResults('<div class="status-box status-info">ℹ Define la estructura hiperestática o usa "⚡ Ejemplo", luego presiona "▶ Calcular".</div>');
+    return;
+  }
+  const glP = glMetodoClase(AppState.nodos, AppState.barras);
+  const GH = -glP.GL;
+  if(GH <= 0){
+    const msg = glP.GL === 0
+      ? 'La estructura actual es <b>ISOSTÁTICA (GL = 0)</b>. Puedes resolverla en el Módulo 5.'
+      : `La estructura actual es <b>INESTABLE (GL = +${glP.GL})</b>. Agrega vínculos antes de calcular.`;
+    showResults(`<div class="status-box status-warn">⚠ ${msg}</div>`);
+    return;
+  }
+
+  const cands = getRedundantCandidates();
+  if(AppState.mod6Mode === 'auto'){
+    const auto = autoSelectRedundants(GH);
+    AppState.mod6ManualKeys = auto ? auto.map(c=>c.key) : [];
+  }
+
+  const selectedCands = cands.filter(c=>AppState.mod6ManualKeys.includes(c.key));
+  let statusHTML = '';
+  if(selectedCands.length !== GH){
+    statusHTML = `<div class="status-box status-warn">🟠 Seleccionadas ${selectedCands.length} de ${GH} redundantes requeridas.</div>`;
+  } else {
+    const { pNodos, pBarras } = buildPrimaryStructure(selectedCands);
+    const check = solveIsoFrame(pNodos, pBarras, []);
+    if(check.ok){
+      statusHTML = `<div class="status-box status-ok">🟢 Estructura primaria isostática y estable (lista para calcular).</div>`;
+    } else {
+      statusHTML = `<div class="status-box status-error">🔴 Esta combinación convierte la estructura primaria en un mecanismo inestable. Elige otros vínculos.</div>`;
+    }
+  }
+
+  const listHTML = cands.map(c=>{
+    const chk = AppState.mod6ManualKeys.includes(c.key) ? 'checked' : '';
+    const dis = AppState.mod6Mode === 'auto' ? 'disabled' : '';
+    return `<label class="red-chk-row">
+      <input type="checkbox" ${chk} ${dis} onchange="toggleMod6Redundant('${c.key}', this.checked)">
+      <span><b>${c.shortLabel}</b> — <span style="color:var(--text-secondary)">${c.label}</span></span>
+    </label>`;
+  }).join('');
+
+  showResults(`
+    <div class="result-section">
+      <div class="result-section-title">Isostatización y Redundantes (GH = ${GH})</div>
+      <div class="eq-box" style="margin-bottom:8px">
+        <span class="eq-label">GL = 3(${glP.n}) − ${glP.p} = ${glP.GL}</span> → <span class="eq-result">Hiperestática de grado ${GH}</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Selección de incógnitas redundantes</label>
+        <select class="form-select" onchange="setMod6Mode(this.value)">
+          <option value="auto" ${AppState.mod6Mode==='auto'?'selected':''}>Automático (Recomendado)</option>
+          <option value="manual" ${AppState.mod6Mode==='manual'?'selected':''}>Manual (Elegir vínculos a liberar)</option>
+        </select>
+      </div>
+      ${statusHTML}
+      <div class="eq-box" style="max-height:220px; overflow-y:auto;">${listHTML}</div>
+      <div style="font-size:10px;color:var(--text-muted)">Presiona <b>▶ Calcular</b> para ejecutar las integrales de Mohr y resolver el sistema.</div>
+    </div>`);
+}
+
+function setMod6Mode(m){
+  AppState.mod6Mode = m;
+  AppState.resultados = null;
+  renderMod6SetupPanel();
+}
+function toggleMod6Redundant(key, checked){
+  if(checked){
+    if(!AppState.mod6ManualKeys.includes(key)) AppState.mod6ManualKeys.push(key);
+  } else {
+    AppState.mod6ManualKeys = AppState.mod6ManualKeys.filter(k=>k!==key);
+  }
+  AppState.resultados = null;
+  renderMod6SetupPanel();
+}
+function setMod6ViewState(st){
+  AppState.mod6ViewState = st;
+  document.querySelectorAll('#mod6-state-btns .diag-toggle').forEach(b=>{
+    b.classList.toggle('active', b.dataset.st === st);
+  });
+  renderCanvas();
+}
+
+function calcMetodoFuerzas(){
+  const glP = glMetodoClase(AppState.nodos, AppState.barras);
+  const GH = -glP.GL;
+  if(GH <= 0){
+    renderMod6SetupPanel();
+    return;
+  }
+
+  const allCands = getRedundantCandidates();
+  let chosenCands = null;
+  if(AppState.mod6Mode === 'auto'){
+    chosenCands = autoSelectRedundants(GH);
+    if(chosenCands) AppState.mod6ManualKeys = chosenCands.map(c=>c.key);
+  } else {
+    chosenCands = allCands.filter(c=>AppState.mod6ManualKeys.includes(c.key));
+  }
+
+  if(!chosenCands || chosenCands.length !== GH){
+    showResults(`<div class="status-box status-error">⚠ No se encontró un conjunto válido de ${GH} redundantes. Revisa la selección en modo Manual.</div>`);
+    return;
+  }
+
+  const { pNodos, pBarras } = buildPrimaryStructure(chosenCands);
+
+  // 1. Resolver Sistema 0 (Estructura primaria + cargas reales)
+  const iso0 = solveIsoFrame(pNodos, pBarras, AppState.cargas);
+  if(!iso0.ok){
+    showResults(`<div class="status-box status-error">⚠ La estructura primaria elegida es inestable (${iso0.message}). Cambia a selección manual y libera otros vínculos.</div>`);
+    return;
+  }
+  const diag0 = buildDiagramasFromIso(iso0, pNodos, pBarras, AppState.cargas);
+
+  // 2. Resolver Sistemas Virtuales i = 1..GH (Estructura primaria + Xi = 1)
+  const virtualSystems = [];
+  for(let i=0; i<GH; i++){
+    const cand = chosenCands[i];
+    const vLoads = buildVirtualLoads(cand, pNodos, pBarras);
+    const isoI = solveIsoFrame(pNodos, pBarras, vLoads);
+    if(!isoI.ok){
+      showResults(`<div class="status-box status-error">⚠ Fallo al resolver el sistema virtual ${i+1} (${cand.shortLabel}).</div>`);
+      return;
+    }
+    const diagI = buildDiagramasFromIso(isoI, pNodos, pBarras, vLoads);
+    virtualSystems.push({
+      index: i+1,
+      cand,
+      label: cand.shortLabel,
+      nodos: pNodos,
+      barras: pBarras,
+      cargas: vLoads,
+      iso: isoI,
+      reacciones: isoI.reactions,
+      diagramas: diagI
+    });
+  }
+
+  // 3. Ensamblar matriz de flexibilidad [EI * δ_ij] y vector [EI * Δ_i0] mediante Integrales de Mohr
+  const deltaMat = Array.from({length:GH}, ()=>new Array(GH).fill(0));
+  const delta0Vec = new Array(GH).fill(0);
+  const barContributions = {}; // para desglose pedagógico
+
+  for(let i=0; i<GH; i++){
+    const vsI = virtualSystems[i];
+    // Desplazamiento libre Δ_i0
+    let sum0 = 0;
+    const contrib0 = [];
+    pBarras.forEach(b=>{
+      const me0 = iso0.memberEnds.find(m=>m.barId===b.id);
+      const meI = vsI.iso.memberEnds.find(m=>m.barId===b.id);
+      const cg0 = AppState.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+      const cgI = vsI.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+      const val = integrateMohrPair(meI, cgI, me0, cg0, pBarras);
+      sum0 += val;
+      contrib0.push({ bar: barName(b.id), val });
+    });
+    delta0Vec[i] = sum0;
+    barContributions[`D_${i+1}_0`] = contrib0;
+
+    // Flexibilidades δ_ij (simétrica)
+    for(let j=i; j<GH; j++){
+      const vsJ = virtualSystems[j];
+      let sumIJ = 0;
+      const contribIJ = [];
+      pBarras.forEach(b=>{
+        const meI = vsI.iso.memberEnds.find(m=>m.barId===b.id);
+        const meJ = vsJ.iso.memberEnds.find(m=>m.barId===b.id);
+        const cgI = vsI.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+        const cgJ = vsJ.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+        const val = integrateMohrPair(meI, cgI, meJ, cgJ, pBarras);
+        sumIJ += val;
+        contribIJ.push({ bar: barName(b.id), val });
+      });
+      deltaMat[i][j] = sumIJ;
+      deltaMat[j][i] = sumIJ;
+      barContributions[`d_${i+1}_${j+1}`] = contribIJ;
+    }
+  }
+
+  // 4. Resolver [δ]{X} = -{Δ0} con reducción automática de rango si hay acoplamiento axial
+  const rhs = delta0Vec.map(v => -v);
+  const solved = solveWithRankReduction(deltaMat, rhs);
+  if(!solved){
+    showResults('<div class="status-box status-error">⚠ El sistema de compatibilidad [δ]{X} = −{Δ0} es singular.</div>');
+    return;
+  }
+  const X = solved.X;
+
+  // 5. Superposición de reacciones externas finales
+  const finalRxMap = {};
+  AppState.nodos.forEach(nd=>{
+    if(nd.support && nd.support!=='none'){
+      finalRxMap[nd.id] = { nodeId: nd.id, name: nd.name, fx: 0, fy: 0, m: 0 };
+    }
+  });
+  // Sumar Sistema 0
+  iso0.reactions.forEach(r=>{
+    if(finalRxMap[r.nodeId]){
+      finalRxMap[r.nodeId].fx += r.fx;
+      finalRxMap[r.nodeId].fy += r.fy;
+      finalRxMap[r.nodeId].m  += r.m;
+    }
+  });
+  // Sumar X_i * Sistema i (reacciones en apoyos remanentes + el propio valor X_i en el vínculo liberado)
+  for(let i=0; i<GH; i++){
+    const vs = virtualSystems[i];
+    const xi = X[i];
+    vs.reacciones.forEach(r=>{
+      if(finalRxMap[r.nodeId]){
+        finalRxMap[r.nodeId].fx += xi * r.fx;
+        finalRxMap[r.nodeId].fy += xi * r.fy;
+        finalRxMap[r.nodeId].m  += xi * r.m;
+      }
+    });
+    const c = vs.cand;
+    if(c.kind==='ext_fx' && finalRxMap[c.nodeId]) finalRxMap[c.nodeId].fx += xi;
+    if(c.kind==='ext_fy' && finalRxMap[c.nodeId]) finalRxMap[c.nodeId].fy += xi;
+    if(c.kind==='ext_m'  && finalRxMap[c.nodeId]) finalRxMap[c.nodeId].m  += xi;
+  }
+  const finalReactions = Object.values(finalRxMap);
+
+  // 6. Superposición de esfuerzos internos y diagramas finales por barra
+  const finalMemberEnds = iso0.memberEnds.map(me0=>{
+    const dNi = { ...me0.dNi };
+    const dNj = { ...me0.dNj };
+    for(let i=0; i<GH; i++){
+      const meI = virtualSystems[i].iso.memberEnds.find(m=>m.barId===me0.barId);
+      if(!meI) continue;
+      dNi.N += X[i]*meI.dNi.N; dNi.V += X[i]*meI.dNi.V; dNi.M += X[i]*meI.dNi.M;
+      dNj.N += X[i]*meI.dNj.N; dNj.V += X[i]*meI.dNj.V; dNj.M += X[i]*meI.dNj.M;
+    }
+    return { barId: me0.barId, L: me0.L, th: me0.th, dNi, dNj };
+  });
+
+  const finalDiagramas = diag0.map((d0, idx)=>{
+    const pts = d0.points.map((p0, pIdx)=>{
+      let v = p0.v, m = p0.m, n = p0.n;
+      for(let i=0; i<GH; i++){
+        const pI = virtualSystems[i].diagramas[idx].points[pIdx];
+        v += X[i]*pI.v;
+        m += X[i]*pI.m;
+        n += X[i]*pI.n;
+      }
+      return { t: p0.t, s: p0.s, v: R(v), m: R(m), n: R(n) };
+    });
+    const meF = finalMemberEnds.find(x=>x.barId===d0.barId);
+    const cgF = AppState.cargas.filter(c=>c.elem===d0.barId && loadTarget(c)==='bar');
+    const eqF = memberEquations(meF, cgF, AppState.barras);
+    return {
+      ni: d0.ni, nj: d0.nj, barId: d0.barId, points: pts, L: d0.L,
+      Vmax: Math.max(...pts.map(p=>Math.abs(p.v))),
+      Mmax: Math.max(...pts.map(p=>Math.abs(p.m))),
+      Nmax: Math.max(...pts.map(p=>Math.abs(p.n))),
+      eqV: eqF.eqV, eqM: eqF.eqM
+    };
+  });
+
+  // Verificación de equilibrio global de la estructura hiperestática
+  const refN = AppState.nodos[0];
+  let chkFx = 0, chkFy = 0, chkM = 0;
+  finalReactions.forEach(r=>{
+    const nd = AppState.nodos.find(n=>n.id===r.nodeId);
+    chkFx += r.fx; chkFy += r.fy;
+    chkM  += r.m + r.fy*(nd.x - refN.x) - r.fx*(nd.y - refN.y);
+  });
+  AppState.cargas.forEach(c=>{
+    if(c.tipo==='Fx'||c.tipo==='Fy'){
+      const nd = AppState.nodos.find(n=>n.id===c.elem);
+      if(nd){
+        chkFx += (c.fx||0); chkFy += (c.fy||0);
+        chkM  += (c.fy||0)*(nd.x - refN.x) - (c.fx||0)*(nd.y - refN.y);
+      }
+    } else if(c.tipo==='M'){
+      chkM += (c.m||0);
+    } else if(c.tipo==='dist'||c.tipo==='dist_tri'){
+      const b = AppState.barras.find(x=>x.id===c.elem);
+      const ni = AppState.nodos.find(x=>x.id===b.ni), nj = AppState.nodos.find(x=>x.id===b.nj);
+      const L = getBarLength(b), qi = c.qi??c.q??0, qj = c.qj??c.q??0;
+      const t0 = c.a??0, t1 = c.b??1, span = t1-t0, qavg = (qi+qj)/2;
+      const dv = dirVector(c,b), Rmod = qavg*span*L;
+      const Rfx = Rmod*dv.dx, Rfy = Rmod*dv.dy;
+      const tc = (Math.abs(qi+qj)<1e-12)?(t0+t1)/2:t0+span*(qi+2*qj)/(3*(qi+qj));
+      const px = ni.x + tc*(nj.x-ni.x), py = ni.y + tc*(nj.y-ni.y);
+      chkFx += Rfx; chkFy += Rfy;
+      chkM  += Rfy*(px - refN.x) - Rfx*(py - refN.y);
+    }
+  });
+
+  // Actualizar botones de estado en la barra superior del canvas
+  const stWrap = document.getElementById('mod6-state-btns');
+  if(stWrap){
+    stWrap.style.display = 'flex';
+    let btns = `<button class="diag-toggle st active" data-st="real" onclick="setMod6ViewState('real')">Real (Final)</button>`;
+    btns += `<button class="diag-toggle st" data-st="sys0" onclick="setMod6ViewState('sys0')">Sist. 0</button>`;
+    virtualSystems.forEach(vs=>{
+      btns += `<button class="diag-toggle st" data-st="sys${vs.index}" onclick="setMod6ViewState('sys${vs.index}')">Sist. ${vs.index}</button>`;
+    });
+    stWrap.innerHTML = btns;
+  }
+  AppState.mod6ViewState = 'real';
+
+  AppState.resultados = {
+    modulo: 6,
+    reacciones: finalReactions,
+    diagramas: finalDiagramas,
+    mod6: {
+      glP, GH, chosenCands, deltaMat, delta0Vec, X, coupledInfo: solved.coupledInfo,
+      sys0: { nodos: pNodos, barras: pBarras, iso: iso0, reacciones: iso0.reactions, diagramas: diag0 },
+      virtualSystems,
+      finalMemberEnds,
+      eqCheck: { fx: R(chkFx), fy: R(chkFy), m: R(chkM) }
+    }
+  };
+
+  // Renderizar informe completo en panel derecho
+  const ul = unitLabel(), ulM = ul==='kN'?'kN·m':(ul==='t'?'t·m':'kips·ft');
+
+  const matrixRows = deltaMat.map((row, i)=>{
+    return `<tr><th>δ<sub>${i+1}j</sub></th>` + row.map(v=>`<td class="val">${R(v)}</td>`).join('') + `<td class="compress">${R(delta0Vec[i])}</td></tr>`;
+  }).join('');
+
+  const solRows = chosenCands.map((c, i)=>{
+    const val = R(X[i]);
+    const isCoupled = solved.coupledInfo.some(info=>info.idx===i);
+    return `<tr>
+      <td><b>X<sub>${i+1}</sub> = ${c.shortLabel}</b></td>
+      <td class="val">${val} ${c.unit}</td>
+      <td>${isCoupled ? '<span style="color:var(--accent-yellow)">Acoplada (EA→∞)</span>' : (val>=0 ? 'Mismo sentido (+)' : 'Sentido opuesto (−)')}</td>
+    </tr>`;
+  }).join('');
+
+  const eqLines = AppState.barras.map(b=>{
+    const me0 = iso0.memberEnds.find(m=>m.barId===b.id);
+    const cg0 = AppState.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+    const eq0 = memberEquations(me0, cg0, pBarras);
+    const vEqs = virtualSystems.map(vs=>{
+      const meI = vs.iso.memberEnds.find(m=>m.barId===b.id);
+      const cgI = vs.cargas.filter(c=>c.elem===b.id && loadTarget(c, pNodos)==='bar');
+      const eqI = memberEquations(meI, cgI, pBarras);
+      return `<span class="eq-label">m<sub>${vs.index}</sub>(s):</span> ${eqI.eqM}`;
+    }).join('<br>');
+    return `<div class="eq-box" style="margin-bottom:6px">
+      <strong style="color:var(--accent-cyan)">Barra ${barName(b.id)}</strong> <span class="eq-comment">(L = ${R(getBarLength(b))} m)</span><br>
+      <span class="eq-label">M<sub>0</sub>(s):</span> ${eq0.eqM}<br>
+      ${vEqs}
+    </div>`;
+  }).join('');
+
+  const reactRows = finalReactions.map(r=>{
+    const parts = [];
+    if(Math.abs(r.fx)>1e-7) parts.push(`Rx = ${R(r.fx)} ${ul}`);
+    if(Math.abs(r.fy)>1e-7) parts.push(`Ry = ${R(r.fy)} ${ul}`);
+    if(Math.abs(r.m)>1e-7)  parts.push(`M = ${R(r.m)} ${ulM}`);
+    return `<tr><td><b>${r.name}</b></td><td class="val">${parts.join(' &nbsp;|&nbsp; ') || '0'}</td></tr>`;
+  }).join('');
+
+  const effortRows = finalDiagramas.map(d=>{
+    const ni = AppState.nodos.find(n=>n.id===d.ni), nj = AppState.nodos.find(n=>n.id===d.nj);
+    return `<tr><td>${ni.name}${nj.name}</td><td class="val">${R(d.Nmax)}</td><td class="val">${R(d.Vmax)}</td><td class="val">${R(d.Mmax)}</td></tr>`;
+  }).join('');
+
+  showResults(`
+    <div class="result-section">
+      <div class="result-section-title">1. Diagnóstico e Isostatización (GH = ${GH})</div>
+      <div class="eq-box">
+        <span class="eq-label">GL = 3(${glP.n}) − ${glP.p} = ${glP.GL}</span> → <span class="eq-result">Hiperestática Grado ${GH}</span><br>
+        <span class="eq-comment">Hipótesis: Flexión pura (EI constante, EA → ∞) · Cuadratura Gauss-Legendre 3 pts.</span>
+      </div>
+      ${solved.coupledInfo.length ? `<div class="status-box status-warn" style="font-size:11px">ℹ ${solved.coupledInfo.length} coordenada(s) acoplada(s) o nula(s) por inextensibilidad axial (EA → ∞) reducidas automáticamente.</div>` : ''}
+    </div>
+
+    <div class="result-section">
+      <div class="result-section-title">2. Matriz de Flexibilidad [EI·δ<sub>ij</sub>] y Vector [EI·Δ<sub>i0</sub>]</div>
+      <div style="overflow-x:auto">
+        <table class="result-table">
+          <tr><th></th>${chosenCands.map((_,j)=>`<th>X<sub>${j+1}</sub></th>`).join('')}<th>EI·Δ<sub>i0</sub></th></tr>
+          ${matrixRows}
+        </table>
+      </div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-section-title">3. Incógnitas Hiperestáticas Resueltas</div>
+      <table class="result-table">
+        <tr><th>Redundante</th><th>Valor</th><th>Interpretación</th></tr>
+        ${solRows}
+      </table>
+    </div>
+
+    <div class="result-section">
+      <div class="result-section-title">4. Reacciones Definitivas y Equilibrio Global</div>
+      <table class="result-table">
+        <tr><th>Apoyo</th><th>Componentes Finales</th></tr>
+        ${reactRows}
+      </table>
+      <div class="eq-box" style="font-size:10px">
+        <span class="eq-label">Verificación global:</span> ΣFx = ${R(chkFx)} ✓ &nbsp;|&nbsp; ΣFy = ${R(chkFy)} ✓ &nbsp;|&nbsp; ΣM = ${R(chkM)} ✓
+      </div>
+    </div>
+
+    <div class="result-section">
+      <div class="result-section-title">5. Esfuerzos Máximos por Miembro</div>
+      <table class="result-table">
+        <tr><th>Barra</th><th>N_max</th><th>V_max</th><th>M_max</th></tr>
+        ${effortRows}
+      </table>
+    </div>
+
+    <div class="result-section">
+      <div class="result-section-title">6. Ecuaciones M<sub>0</sub>(s) y m<sub>i</sub>(s) por Tramo</div>
+      ${eqLines}
+    </div>
+  `);
+}
+
+// ══════════════════════════════════════════════════════════
 // 9. DISPATCHER PRINCIPAL
 // ══════════════════════════════════════════════════════════
 function calculate(){
@@ -3224,6 +3882,7 @@ function calculate(){
     case 3: calcNodos(); break;
     case 4: calcSecciones(); break;
     case 5: calcPortico(); break;
+    case 6: calcMetodoFuerzas(); break;
   }
   renderCanvas();
   const badge=document.getElementById('results-badge');
@@ -3263,7 +3922,7 @@ const EJEMPLOS={
     clearAllSilent();
     addN('A',0,0,'pin'); addN('B',8,0,'pin'); addN('C',4,3,'none');
     addB('A','C'); addB('C','B');
-    addCDist('AC',5);
+    addCDist('AC',-5);
     center();
   },
   3:()=>{
@@ -3292,6 +3951,26 @@ const EJEMPLOS={
     addB('A','B','frame'); addB('B','C','frame'); addB('C','D','frame');
     addC('B','Fx',5,0);
     center();
+  },
+  6:()=>{
+    // Ejemplo 02 Resuelto: Pórtico en escuadra hiperestático (GH = 1)
+    // Columna AB (4 m) con q = 1 t/m -> y viga BC (5 m) con q = 2 t/m ↓
+    clearAllSilent();
+    document.getElementById('cfg-units').value = 'Ton_m';
+    changeUnits('Ton_m');
+    addN('A',0,0,'pin');
+    addN('B',0,4,'none');
+    addN('C',5,4,'pin');
+    addB('A','B','frame');
+    addB('B','C','frame');
+    const bAB = AppState.barras[0];
+    const bBC = AppState.barras[1];
+    AppState.cargas.push({id:++AppState._loadCounter, elem:bAB.id, elemType:'bar', tipo:'dist', q:1, qi:1, qj:1, a:0, b:1, dir:'horizontal', ang:0});
+    AppState.cargas.push({id:++AppState._loadCounter, elem:bBC.id, elemType:'bar', tipo:'dist', q:-2, qi:-2, qj:-2, a:0, b:1, dir:'vertical', ang:0});
+    AppState.mod6Mode = 'auto';
+    AppState.mod6ManualKeys = [];
+    center();
+    renderMod6SetupPanel();
   }
 };
 
@@ -3319,6 +3998,7 @@ function addCDist(barName,q){
   AppState.cargas.push({id:++AppState._loadCounter,elem:b.id,elemType:'bar',tipo:'dist',q,qi:q,qj:q});
 }
 function center(){
+  if(AppState.nodos.length===0) return;
   const xs=AppState.nodos.map(n=>n.x), ys=AppState.nodos.map(n=>n.y);
   const cx=(Math.min(...xs)+Math.max(...xs))/2;
   const cy=(Math.min(...ys)+Math.max(...ys))/2;
@@ -3341,13 +4021,28 @@ function switchModule(n){
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.classList.toggle('active',+b.dataset.mod===n);
   });
-  const names={1:'Estabilidad y Determinación',2:'Arco Triarticulado',3:'Armadura — Método de Nodos',4:'Armadura — Método de Secciones',5:'Pórtico Isostático'};
+  const names={
+    1:'Estabilidad y Determinación',
+    2:'Arco Triarticulado',
+    3:'Armadura — Método de Nodos',
+    4:'Armadura — Método de Secciones',
+    5:'Pórtico Isostático',
+    6:'Estructura II — Método de las Fuerzas'
+  };
   document.getElementById('st-module').textContent='Módulo: '+(names[n]||'');
   document.getElementById('tool-cut').style.display=n===4?'flex':'none';
-  document.getElementById('diagram-controls').classList.toggle('visible',n===5);
+  document.getElementById('diagram-controls').classList.toggle('visible', n===5 || n===6);
+  const stWrap = document.getElementById('mod6-state-btns');
+  if(stWrap) stWrap.style.display = 'none';
   AppState.resultados=null;
   AppState._lastCalcSig=null;
-  showResults('<div class="status-box status-info">ℹ Presiona "▶ Calcular" para analizar la estructura actual.</div>');
+  AppState.mod6ViewState='real';
+
+  if(n===6){
+    renderMod6SetupPanel();
+  } else {
+    showResults('<div class="status-box status-info">ℹ Presiona "▶ Calcular" para analizar la estructura actual.</div>');
+  }
   renderCanvas();
 }
 
@@ -3409,7 +4104,7 @@ function modelSig(){
   const n=AppState.nodos.map(x=>[x.id,x.x,x.y,x.support].join(':')).join('|');
   const b=AppState.barras.map(x=>[x.id,x.ni,x.nj,x.type,x.hinge?1:0,x.hingeEnd||''].join(':')).join('|');
   const c=AppState.cargas.map(x=>[x.id,x.tipo,x.elem,x.elemType||'',x.fx||0,x.fy||0,x.m||0,x.qi||0,x.qj||0,x.a??0,x.b??1,x.dir||''].join(':')).join('|');
-  return AppState.modulo+'#'+n+'#'+b+'#'+c;
+  return AppState.modulo+'#'+n+'#'+b+'#'+c+'#'+AppState.mod6Mode+'#'+AppState.mod6ManualKeys.join(',');
 }
 function checkStale(){
   if(!AppState._lastCalcSig) return;
@@ -3441,6 +4136,8 @@ function clearAllSilent(){
   AppState._lastCalcSig=null;
   AppState._nodeCounter=0; AppState._barCounter=0; AppState._loadCounter=0;
   AppState.cutPoints=[];
+  AppState.mod6ManualKeys=[];
+  AppState.mod6ViewState='real';
 }
 
 function clearAll(){
@@ -3473,9 +4170,11 @@ document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.targ
 // 12. GUARDAR / CARGAR SESIÓN
 // ══════════════════════════════════════════════════════════
 function saveSession(){
-  const data=JSON.stringify({version:'1.6.3',modulo:AppState.modulo,
+  const data=JSON.stringify({version:'1.7.0',modulo:AppState.modulo,
     nodos:AppState.nodos,barras:AppState.barras,cargas:AppState.cargas,
-    config:AppState.config,counters:{n:AppState._nodeCounter,b:AppState._barCounter,l:AppState._loadCounter}
+    config:AppState.config,
+    mod6:{mode:AppState.mod6Mode, manualKeys:AppState.mod6ManualKeys},
+    counters:{n:AppState._nodeCounter,b:AppState._barCounter,l:AppState._loadCounter}
   },null,2);
   const a=document.createElement('a');
   a.href='data:application/json,'+encodeURIComponent(data);
@@ -3545,6 +4244,10 @@ function loadSession(e){
       if(data.config && data.config.units){
         document.getElementById('cfg-units').value=data.config.units;
         changeUnits(data.config.units);
+      }
+      if(data.mod6){
+        AppState.mod6Mode = data.mod6.mode || 'auto';
+        AppState.mod6ManualKeys = data.mod6.manualKeys || [];
       }
 
       AppState.resultados=null;
@@ -3673,13 +4376,14 @@ function exportPDF(){
   doc.setTextColor(0,229,255); doc.setFont('helvetica','bold'); doc.setFontSize(18);
   doc.text('StructSolver I',mg,14);
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(120,120,160);
-  doc.text('Análisis Estructural Estático',mg,21);
+  doc.text('Análisis Estructural Estático e Hiperestático',mg,21);
   doc.text(new Date().toLocaleString('es-VE'),mg,27);
   doc.setDrawColor(0,229,255); doc.setLineWidth(0.8); doc.line(mg,31,W-mg,31);
   y=38;
 
   const modNames={1:'Estabilidad y Determinación',2:'Arco Triarticulado',
-    3:'Armadura — Método de Nodos',4:'Armadura — Método de Secciones',5:'Pórtico Isostático'};
+    3:'Armadura — Método de Nodos',4:'Armadura — Método de Secciones',5:'Pórtico Isostático',
+    6:'Estructura II — Método de las Fuerzas'};
   doc.setFillColor(18,18,55); doc.rect(mg,y-5,W-2*mg,11,'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(255,255,255);
   doc.text('Módulo: '+(modNames[AppState.modulo]||''),mg+3,y+2); y+=14;
@@ -3711,6 +4415,8 @@ function exportPDF(){
   });
   y=Math.max(y,yL)+3; hRule();
 
+  const cleanEq = s => s.replace(/−/g, '-').replace(/∈/g, ' en ').replace(/·/g, '*');
+
   if(AppState.modulo===1 && AppState.resultados){
     const res=AppState.resultados;
     const {m,n,r,h,f,GL,GR,I,E,a,mi,hasPortico,geoOk,geoWarning,
@@ -3732,7 +4438,6 @@ function exportPDF(){
     y+=2; hRule();
 
     hdrBlock('b) ANÁLISIS — Cuatro métodos de determinación');
-
     if(res.glP){ subHdr('① Método de clase — GD = 3N − V',[0,140,220]);
       eqBox([
         {t:'N = '+res.glP.n+' elementos', c:[180,180,180]},
@@ -3763,54 +4468,54 @@ function exportPDF(){
       {t:indDiag,                          c:I===E?[0,230,118]:I>E?[255,80,100]:[255,215,0]},
     ]);
 
-    subHdr('Resumen comparativo',[0,140,220]);
-    tblRow(['Método','Ecuación','Resultado','Diagnóstico'],[35,55,25,60],true);
-    tblRow(['① Clásico',formula,'f='+f, clasifLabel.split('—')[0].trim()],[35,55,25,60]);
-    tblRow(['② CCM','GL='+GL+' GR='+GR,'',ccmDiag.split('→')[0].trim()],[35,55,25,60]);
-    tblRow(['③ I vs E','I='+I+' E='+E,'',indDiag.split('→')[0].trim()],[35,55,25,60]);
-    y+=2; hRule();
+  } else if(AppState.modulo===6 && AppState.resultados && AppState.resultados.mod6){
+    const m6 = AppState.resultados.mod6;
+    const ul = unitLabel(), ulM = ul==='kN'?'kN·m':(ul==='t'?'t·m':'kips·ft');
 
-    hdrBlock('c) ESTABILIZACIÓN');
-    const fg=clasifTipo==='ok'?[0,220,120]:clasifTipo==='error'?[255,100,80]:[255,215,0];
-    const bg=clasifTipo==='ok'?[0,50,25]:clasifTipo==='error'?[80,20,10]:[60,50,0];
-    colorBox((clasifTipo==='ok'?'✓ ':clasifTipo==='error'?'⚠ ':'ℹ ')+clasifLabel, fg, bg);
-    if(f===0){
-      if(geoOk){
-        colorBox('✓  Estabilidad geométrica confirmada — apoyos no paralelos ni concurrentes',[0,220,120],[0,50,25]);
-      } else {
-        colorBox('⚠  Inestabilidad geométrica — '+geoWarning,[255,100,80],[80,20,10]);
-      }
-    } else {
-      line(f<0
-        ?'Para estabilizar: agregar '+Math.abs(f)+' vínculo(s) hasta f = 0.'
-        :'Para estabilizar: eliminar '+f+' vínculo(s) hasta f = 0.',3);
-    }
-    y+=2; hRule();
+    hdrBlock('MÉTODO DE LAS FUERZAS — COMPATIBILIDAD DE DEFORMACIONES');
+    subHdr('1. Matriz de Flexibilidad [EI * delta_ij] y Desplazamientos [EI * Delta_i0]');
+    const hdrCols = ['Fila', ...m6.chosenCands.map((_,j)=>'X'+(j+1)), 'EI*Delta_i0'];
+    const ws = [22, ...m6.chosenCands.map(()=>28), 32];
+    tblRow(hdrCols, ws, true);
+    m6.deltaMat.forEach((row, i)=>{
+      tblRow(['d_'+(i+1)+'j', ...row.map(v=>R(v)), R(m6.delta0Vec[i])], ws);
+    });
+    y+=2;
 
-    hdrBlock('d) INCLUSIÓN O ELIMINACIÓN DE VÍNCULOS');
-    if(f===0 && geoOk){
-      colorBox('✓  No se requieren modificaciones. Estructura isostática y geométricamente estable.',[0,220,120],[0,50,25]);
-    } else {
-      if(f<0){
-        const falta=Math.abs(f);
-        line('Faltan '+falta+' vínculo(s). Opciones:',0,true);
-        line('• Agregar '+falta+' barra(s) en zonas sin triangulación.',4);
-        if(falta>=2) line('• Agregar 1 articulado fijo (aporta 2 reacciones simultáneas).',4);
-        line('• Agregar 1 rodillo por cada grado faltante (1 reacción c/u).',4);
-        if(h>0) line('• Eliminar '+Math.min(h,falta)+' rótula(s) extrema(s) existente(s).',4);
-      } else if(f>0){
-        line('Sobran '+f+' vínculo(s). Opciones:',0,true);
-        line('• Eliminar '+f+' barra(s) redundantes.',4);
-        line('• Reemplazar apoyo empotrado por articulado (libera 1 grado).',4);
-        line('• Insertar '+f+' rótula(s) extrema(s) ⊣⊢ en miembros existentes.',4);
-      }
-      if(!geoOk && f===0){
-        line('Reubicación necesaria:',0,true);
-        line('• '+geoWarning,4);
-      }
-      y+=2;
-      line('META: f = 0  Y  GL = GR  Y  I = E  Y  apoyos no paralelos → ESTABLE e ISOSTÁTICO.',0,true);
-    }
+    subHdr('2. Incógnitas Hiperestáticas Resueltas');
+    tblRow(['Redundante', 'Descripción', 'Valor'], [30, 95, 50], true);
+    m6.chosenCands.forEach((c, i)=>{
+      tblRow(['X'+(i+1)+' ('+c.shortLabel+')', c.label, R(m6.X[i])+' '+c.unit], [30, 95, 50]);
+    });
+    y+=2;
+
+    subHdr('3. Reacciones Definitivas');
+    tblRow(['Nodo','Rx ('+ul+')','Ry ('+ul+')','M ('+ulM+')'],[30,45,45,45],true);
+    AppState.resultados.reacciones.forEach(rx=>{
+      tblRow([rx.name, R(rx.fx||0), R(rx.fy||0), R(rx.m||0)],[30,45,45,45]);
+    });
+    y+=2;
+
+    subHdr('4. Esfuerzos Máximos por Miembro');
+    tblRow(['Miembro','N_max','V_max','M_max'],[36,36,36,36],true);
+    AppState.resultados.diagramas.forEach(d=>{
+      const ni=AppState.nodos.find(no=>no.id===d.ni);
+      const nj=AppState.nodos.find(no=>no.id===d.nj);
+      tblRow([(ni?ni.name:'?')+(nj?nj.name:'?'), R(d.Nmax||0), R(d.Vmax), R(d.Mmax)],[36,36,36,36]);
+    });
+    y+=2;
+
+    hdrBlock('DIAGRAMAS V–M DEFINITIVOS POR MIEMBRO');
+    AppState.resultados.diagramas.forEach(d=>{
+      const ni=AppState.nodos.find(no=>no.id===d.ni);
+      const nj=AppState.nodos.find(no=>no.id===d.nj);
+      const nom=(ni?ni.name:'?')+(nj?nj.name:'?');
+      subHdr('Miembro '+nom+' — L = '+R(d.L)+' m');
+      drawMiniDiag('V ('+ul+')',d.points.map(p=>({t:p.t,v:p.v})), false);
+      drawMiniDiag('M ('+ulM+')',d.points.map(p=>({t:p.t,v:p.m})), AppState.invertM);
+      if(d.eqV) line('Ecuaciones: '+cleanEq(d.eqV)+'   |   '+cleanEq(d.eqM),2);
+      y+=4;
+    });
 
   } else {
     hdrBlock('RESULTADOS');
@@ -3839,7 +4544,6 @@ function exportPDF(){
         tblRow([(ni?ni.name:'?')+(nj?nj.name:'?'), R(d.Nmax||0), R(d.Vmax), R(d.Mmax)],[36,36,36,36]);
       }); y+=2;
       hdrBlock('DIAGRAMAS V–M POR MIEMBRO');
-      const cleanEq = s => s.replace(/−/g, '-').replace(/∈/g, ' en ').replace(/·/g, '*');
       AppState.resultados.diagramas.forEach(d=>{
         const ni=AppState.nodos.find(no=>no.id===d.ni);
         const nj=AppState.nodos.find(no=>no.id===d.nj);
@@ -3858,7 +4562,7 @@ function exportPDF(){
   hRule();
 
   checkPage(50);
-  hdrBlock('DIAGRAMA DE LA ESTRUCTURA (SISTEMA + DFC + DMF)');
+  hdrBlock('DIAGRAMA DE LA ESTRUCTURA');
   const svgEl=document.getElementById('main-svg');
   const svgClone=svgEl.cloneNode(true);
   svgClone.setAttribute('xmlns','http://www.w3.org/2000/svg');
@@ -3887,7 +4591,7 @@ function exportPDF(){
     for(let p=1;p<=total;p++){
       doc.setPage(p);
       doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(80,80,120);
-      doc.text('StructSolver I — Análisis Estructural Estático',mg,292);
+      doc.text('StructSolver I — Análisis Estructural Estático e Hiperestático',mg,292);
       doc.text('Página '+p+' de '+total, W-mg, 292, {align:'right'});
       doc.setDrawColor(30,30,64); doc.setLineWidth(0.2); doc.line(mg,289,W-mg,289);
     }
@@ -3903,7 +4607,7 @@ function exportPDF(){
 
 
 /* ============================================================================
-   StructSolver v1.6.3 — Solucionador isostático por despiece + método GD de clase
+   StructSolver v1.7.0 — Solucionador isostático por despiece + método GD de clase
    ============================================================================ */
 
 function hingeEndOfBar(bar, isSupport) {
@@ -4117,12 +4821,13 @@ function solveIsoFrame(nodos, barras, cargas) {
   return { ok: true, maxRes, unknowns: unknowns.length, equations: NE, reactions, memberEnds, nodeChecks };
 }
 
-function internalForcesAt(me, cargasB, s){
+function internalForcesAt(me, cargasB, s, barrasList){
+  const bs = barrasList || (typeof AppState!=='undefined' ? AppState.barras : []);
   const co=Math.cos(me.th), si=Math.sin(me.th);
   const V0=me.dNi.V, M0=me.dNi.M, N0=me.dNi.N;
   let V=V0, M=M0+V0*s, N=N0;
   const L=me.L;
-  const _bar=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
+  const _bar=(me.barId!=null)?bs.find(b=>b.id===me.barId):null;
   for(const c of (cargasB||[])){
     if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const qi=c.qi??c.q??0, qj=c.qj??c.q??0;
@@ -4130,7 +4835,7 @@ function internalForcesAt(me, cargasB, s){
       if(lb<=la+1e-12||s<=la+1e-12) continue;
       const se=Math.min(s,lb), w=se-la;
       const k=(qj-qi)/Math.max(1e-12,(lb-la));
-      const dv=_bar?dirVector(c,_bar):{dx:0,dy:-1};
+      const dv=_bar?dirVector(c,_bar):{dx:0,dy:1};
       const tF=dv.dx*(-si)+dv.dy*co;
       const aF=dv.dx*co+dv.dy*si;
       const qT_w=(qi*w+k*w*w/2)*tF;
@@ -4152,7 +4857,8 @@ function internalForcesAt(me, cargasB, s){
   return {V,M,N};
 }
 
-function memberEquations(me, cargasBarra){
+function memberEquations(me, cargasBarra, barrasList){
+  const bs = barrasList || (typeof AppState!=='undefined' ? AppState.barras : []);
   const L=me.L;
   const bSet=new Set([0,L]);
   (cargasBarra||[]).forEach(cg=>{
@@ -4163,7 +4869,7 @@ function memberEquations(me, cargasBarra){
   const bb=[bounds[0]];
   for(const x of bounds) if(x-bb[bb.length-1]>1e-7) bb.push(x);
 
-  const F=s=>internalForcesAt(me,cargasBarra,s);
+  const F=s=>internalForcesAt(me,cargasBarra,s,bs);
   const roots=[];
   for(let i=0;i<bb.length-1;i++){
     const sa=bb[i], sb=bb[i+1];
@@ -4190,7 +4896,7 @@ function memberEquations(me, cargasBarra){
 
   const co=Math.cos(me.th), si=Math.sin(me.th);
   const V0=me.dNi.V, M0=me.dNi.M;
-  const _bar2=(typeof AppState!=='undefined'&&me.barId!=null)?AppState.barras.find(b=>b.id===me.barId):null;
+  const _bar2=(me.barId!=null)?bs.find(b=>b.id===me.barId):null;
   const fmt=n=>{ const v=Math.abs(n)<5e-9?0:n; return v.toFixed(3); };
   const polyV=[], polyM=[];
   for(let i=0;i<bb.length-1;i++){
@@ -4199,7 +4905,7 @@ function memberEquations(me, cargasBarra){
     let v0=V0,v1=0,v2=0, m0=M0,m1=V0,m2=0,m3=0;
     for(const c of (cargasBarra||[])){
       if(c.tipo==='dist'||c.tipo==='dist_tri'){
-        const dv=_bar2?dirVector(c,_bar2):{dx:0,dy:-1};
+        const dv=_bar2?dirVector(c,_bar2):{dx:0,dy:1};
         const tF=dv.dx*(-si)+dv.dy*co;
         const qi=(c.qi??c.q??0)*(-tF), qj=(c.qj??c.q??0)*(-tF);
         const la=(c.a??0)*L, lb=(c.b??1)*L, w=lb-la;
@@ -4381,18 +5087,6 @@ function despieceHTML(isoRes){
     +isoRes.nodeChecks.map(nc=>`<tr><td>${nc.name}</td><td class="val">${R(nc.resFx)}</td><td class="val">${R(nc.resFy)}</td><td class="val">${R(nc.resM)}</td><td>${nc.ok?'✓':'✗'}</td></tr>`).join('')
     +'</table>';
   return h;
-}
-
-function assembleStiffnessMatrix(elements,nodes){
-  const nDOF=nodes.length*3;
-  const K=Array.from({length:nDOF},()=>new Array(nDOF).fill(0));
-  return K;
-}
-function applyBoundaryConditions(K,F,constraints){
-  return {Kr:K,Fr:F};
-}
-function recoverInternalForces(d,elements){
-  return [];
 }
 
 // ══════════════════════════════════════════════════════════
