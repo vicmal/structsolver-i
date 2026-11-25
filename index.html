@@ -149,6 +149,12 @@ body {
   overflow: hidden;
 }
 
+/* Vista angosta (menos de 900 px): paneles apilados en una columna */
+@media (max-width: 900px) {
+  #main { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; overflow-y: auto; }
+  #left-panel, #right-panel { border: none; border-bottom: 1px solid var(--border); max-height: 45vh; }
+}
+
 /* ══ PANEL IZQUIERDO ══ */
 #left-panel {
   background: var(--bg-panel);
@@ -712,7 +718,7 @@ body {
     <!-- Tab Config -->
     <div class="panel-content" id="ptab-config">
       <div class="form-group">
-        <label class="form-label">Unidades (SI)</label>
+        <label class="form-label" for="cfg-units">Unidades (SI)</label>
         <select class="form-select" id="cfg-units" onchange="changeUnits(this.value)">
           <option value="kN_m">kN, m</option>
           <option value="Ton_m">t, m</option>
@@ -720,7 +726,7 @@ body {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Decimales</label>
+        <label class="form-label" for="cfg-dec">Decimales</label>
         <select class="form-select" id="cfg-dec">
           <option value="2">2</option>
           <option value="3" selected>3</option>
@@ -728,7 +734,7 @@ body {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Tamaño de grid</label>
+        <label class="form-label" for="cfg-grid">Tamaño de grid</label>
         <select class="form-select" id="cfg-grid" onchange="setGrid(this.value)">
           <option value="0.5">0.5 m</option>
           <option value="1" selected>1 m</option>
@@ -737,21 +743,21 @@ body {
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Modo de vista (Módulos 5 y 6)</label>
+        <label class="form-label" for="cfg-view-mode">Modo de vista (Módulos 5 y 6)</label>
         <select class="form-select" id="cfg-view-mode" onchange="setViewMode(this.value)">
           <option value="stacked" selected>Apilado (Sistema + DFC + DMF)</option>
           <option value="overlay">Superpuesto sobre estructura</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Convención gráfica de Momento (M)</label>
+        <label class="form-label" for="cfg-m-sign">Convención gráfica de Momento (M)</label>
         <select class="form-select" id="cfg-m-sign" onchange="AppState.invertM=(this.value==='down'); renderCanvas();">
           <option value="down" selected>+M hacia abajo (fibra traccionada)</option>
           <option value="up">+M hacia arriba (cartesiano estándar)</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Escala diagramas (Módulos 5 y 6)</label>
+        <label class="form-label" for="cfg-diag-scale">Escala diagramas (Módulos 5 y 6)</label>
         <input type="range" id="cfg-diag-scale" min="0.1" max="5" step="0.1" value="1" style="width:100%" oninput="diagScale=+this.value; renderCanvas()">
       </div>
     </div>
@@ -2147,8 +2153,10 @@ function cancelTooltip(){
 }
 function confirmNode(){
   const name=document.getElementById('tt-name').value||nextNodeName();
-  const x=+document.getElementById('tt-x').value;
-  const y=+document.getElementById('tt-y').value;
+  let x=+document.getElementById('tt-x').value;
+  let y=+document.getElementById('tt-y').value;
+  if(!Number.isFinite(x)) x=0;
+  if(!Number.isFinite(y)) y=0;
   const support=document.getElementById('tt-support').value;
   if(_tooltipNodeId){
     const n=AppState.nodos.find(no=>no.id===_tooltipNodeId);
@@ -2165,6 +2173,7 @@ function confirmNode(){
 // 6. AGREGAR BARRA
 // ══════════════════════════════════════════════════════════
 function addBar(niId,njId){
+  if(!niId || !njId || niId === njId) return;
   const exists=AppState.barras.some(b=>(b.ni===niId&&b.nj===njId)||(b.ni===njId&&b.nj===niId));
   if(exists) return;
   const hasFrameAlready=AppState.barras.some(b=>b.type==='frame');
@@ -2281,9 +2290,13 @@ function updateNode(id,key,val){
   if(AppState.modulo===6) renderMod6SetupPanel();
 }
 function deleteNode(id){
+  // Clasificar ANTES de mutar: una vez borrado el nodo, loadTarget ya no lo reconoce.
+  const deletedBarIds = new Set(AppState.barras.filter(b=>b.ni===id||b.nj===id).map(b=>b.id));
+  const deletedNodeLoadIds = new Set(AppState.cargas.filter(c=>c.elem===id && loadTarget(c, AppState.nodos)==='node').map(c=>c.id));
+  const deletedBarLoadIds = new Set(AppState.cargas.filter(c=>deletedBarIds.has(c.elem) && loadTarget(c, AppState.nodos)==='bar').map(c=>c.id));
   AppState.nodos=AppState.nodos.filter(n=>n.id!==id);
-  AppState.barras=AppState.barras.filter(b=>b.ni!==id&&b.nj!==id);
-  AppState.cargas=AppState.cargas.filter(c=>!(c.elem===id&&loadTarget(c)==='node'));
+  AppState.barras=AppState.barras.filter(b=>!deletedBarIds.has(b.id));
+  AppState.cargas=AppState.cargas.filter(c=>!deletedNodeLoadIds.has(c.id) && !deletedBarLoadIds.has(c.id));
   AppState.resultados=null;
   renderCanvas(); updateTables(); updateStatusBar();
 }
@@ -2549,8 +2562,7 @@ function calcReactions(){
         const unit=rx.dof==='m'?`${unitLabel()}·m`:unitLabel();
         const label=rx.dof==='fx'?`R${rx.name}x`:rx.dof==='fy'?`R${rx.name}y`:`M${rx.name}`;
         return `${label} = ${R(sol[i])} ${unit}`;
-      }).join('
-')}
+      }).join('\n')}
     ];
     return {reacciones:resList, pasos};
   }
@@ -2835,8 +2847,25 @@ function calcArco(){
         SM_C_left+=(fy*(px-rotula.x)-fx*(py-rotula.y));
       }
     } else if(c.tipo==='M'){
+      let px=0, py=0;
+      if(loadTarget(c, AppState.nodos)==='bar'){
+        const b=AppState.barras.find(ba=>ba.id===c.elem);
+        if(b){
+          const ni=AppState.nodos.find(n=>n.id===b.ni);
+          const nj=AppState.nodos.find(n=>n.id===b.nj);
+          if(ni&&nj){
+            const pos=c.pos!=null?c.pos:0.5;
+            px=ni.x+pos*(nj.x-ni.x); py=ni.y+pos*(nj.y-ni.y);
+          }
+        }
+      } else {
+        const n=AppState.nodos.find(no=>no.id===c.elem);
+        if(n){ px=n.x; py=n.y; }
+      }
       SM_A+=(c.m||0);
-      if(rotula) SM_C_left+=(c.m||0);
+      if(rotula && px<=xMaxRot+1e-5){
+        SM_C_left+=(c.m||0);
+      }
     } else if(c.tipo==='dist'||c.tipo==='dist_tri'){
       const b=AppState.barras.find(ba=>ba.id===c.elem);
       if(!b) return;
@@ -2950,8 +2979,11 @@ function calcNodos(){
   const nodalF={};
   AppState.nodos.forEach(no=>{ nodalF[no.id]={fx:0,fy:0}; });
   AppState.cargas.forEach(c=>{
-    if(c.tipo==='Fx'&&loadTarget(c)==='node'){
-      nodalF[c.elem]={fx:(nodalF[c.elem]?.fx||0)+c.fx, fy:(nodalF[c.elem]?.fy||0)+c.fy};
+    if((c.tipo==='Fx'||c.tipo==='Fy') && loadTarget(c, AppState.nodos)==='node'){
+      nodalF[c.elem]={
+        fx:(nodalF[c.elem]?.fx||0)+(c.fx||0),
+        fy:(nodalF[c.elem]?.fy||0)+(c.fy||0)
+      };
     }
   });
   rxCalc.reacciones.forEach(r=>{
@@ -3046,15 +3078,13 @@ F${n2?n2.name:'?'}${n2j?n2j.name:'?'} = ${R(sol[1])}`});
   let pasosHTML=pasos.map(p=>`
     <div class="step-block" onclick="this.classList.toggle('open')">
       <div class="step-block-title">${p.titulo} <span>▸</span></div>
-      <div class="step-block-body">${p.body.replace(/
-/g,'<br>')}</div>
+      <div class="step-block-body">${p.body.replace(/\n/g,'<br>')}</div>
     </div>`).join('');
 
   showResults(`
     <div class="result-section">
       <div class="result-section-title">Reacciones externas</div>
-      ${rxCalc.pasos.map(p=>`<div class="eq-box">${p.body.replace(/
-/g,'<br>')}</div>`).join('')}
+      ${rxCalc.pasos.map(p=>`<div class="eq-box">${p.body.replace(/\n/g,'<br>')}</div>`).join('')}
     </div>
     <div class="result-section">
       <div class="result-section-title">Fuerzas en barras</div>
@@ -3256,11 +3286,7 @@ function calcPortico(){
   if(iso.ok){
     isoRes=iso;
     rxCalc={ reacciones: iso.reactions.map(r=>({nodeId:r.nodeId, fx:r.fx, fy:r.fy, m:r.m})),
-      pasos:[{titulo:'Sistema resuelto por despiece', body: iso.reactions.map(r=>'R'+r.name+'x = '+R(r.fx)+' '+unitLabel()+'
-R'+r.name+'y = '+R(r.fy)+' '+unitLabel()+(Math.abs(r.m)>1e-9?'
-M'+r.name+' = '+R(r.m)+' '+unitLabel()+'·m':'')).join('
-
-')}] };
+      pasos:[{titulo:'Sistema resuelto por despiece', body: iso.reactions.map(r=>'R'+r.name+'x = '+R(r.fx)+' '+unitLabel()+'\nR'+r.name+'y = '+R(r.fy)+' '+unitLabel()+(Math.abs(r.m)>1e-9?'\nM'+r.name+' = '+R(r.m)+' '+unitLabel()+'·m':'')).join('\n\n')}] };
   } else { rxCalc=calcReactions(); }
   if(!rxCalc){ showResults('<div class="status-box status-error">⚠ '+(iso.message||'No se pudieron calcular las reacciones. Verifique los apoyos.')+'</div>'); return; }
 
@@ -4176,8 +4202,7 @@ function copyTable(btn){
   const section=btn.closest('.result-section');
   const table=section.querySelector('.result-table');
   if(!table) return;
-  const rows=[...table.querySelectorAll('tr')].map(r=>[...r.querySelectorAll('th,td')].map(c=>c.textContent.trim()).join('	')).join('
-');
+  const rows=[...table.querySelectorAll('tr')].map(r=>[...r.querySelectorAll('th,td')].map(c=>c.textContent.trim()).join('	')).join('\n');
   navigator.clipboard.writeText(rows).then(()=>{btn.textContent='✓ Copiado';setTimeout(()=>btn.textContent='📋 Copiar tabla',2000);});
 }
 
@@ -4202,10 +4227,15 @@ function saveSession(){
     mod6:{mode:AppState.mod6Mode, manualKeys:AppState.mod6ManualKeys},
     counters:{n:AppState._nodeCounter,b:AppState._barCounter,l:AppState._loadCounter}
   },null,2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href='data:application/json,'+encodeURIComponent(data);
+  a.href = url;
   a.download=`structsolver_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 function loadSession(e){
   const file=e.target.files[0];
@@ -4284,8 +4314,7 @@ function loadSession(e){
 
       center();
       renderCanvas(); updateTables(); updateStatusBar();
-    }catch(err){ alert('Error al cargar el archivo:
-'+err.message); }
+    }catch(err){ alert('Error al cargar el archivo:\n'+err.message); }
   };
   reader.readAsText(file);
   e.target.value='';
@@ -5070,8 +5099,8 @@ function convPanelHTML(f){
     +'<div class="result-section-title">Conversión guiada a isostática</div>'
     +'<div class="eq-box" style="line-height:2">'
     +'<strong>Sobran '+f+' vínculo(s).</strong> Libera uno por vez y verifica que GD llegue a 0.<br>'
-    +(apoyos.length?'<span class="eq-label">A) Cambiar apoyo:</span> <select id="conv-apoyo-nodo">'+opAp+'</select> → <select id="conv-apoyo-tipo">'+targets(apoyos[0].support)+'</select> <button class="btn" onclick="convApply('apoyo')">Aplicar</button><br>':'')
-    +(barras.length?'<span class="eq-label">B) Insertar rótula ⊣⊢:</span> <select id="conv-barra" onchange="convUpdExt(this.value)">'+opBa+'</select> en <select id="conv-extremo">'+opEx+'</select> <button class="btn" onclick="convApply('rotula')">Aplicar</button><br>':'')
+    +(apoyos.length?'<span class="eq-label">A) Cambiar apoyo:</span> <select id="conv-apoyo-nodo">'+opAp+'</select> → <select id="conv-apoyo-tipo">'+targets(apoyos[0].support)+'</select> <button class="btn" onclick="convApply(\'apoyo\')">Aplicar</button><br>':'')
+    +(barras.length?'<span class="eq-label">B) Insertar rótula ⊣⊢:</span> <select id="conv-barra" onchange="convUpdExt(this.value)">'+opBa+'</select> en <select id="conv-extremo">'+opEx+'</select> <button class="btn" onclick="convApply(\'rotula\')">Aplicar</button><br>':'')
     +'<span class="eq-comment">C) Corte por sección: elimina una barra (libera 3). Hazlo desde la tabla de barras.</span><br>'
     +'<span class="eq-label">Liberaciones aplicadas: '+ConvState.hist.length+'</span> '
     +(ConvState.hist.length?'<button class="btn" onclick="convUndo()">↺ Deshacer última</button>':'')
@@ -5138,6 +5167,17 @@ window.addEventListener('DOMContentLoaded',()=>{
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+<script>
+// Registro del service worker (sw.js): permite usar la aplicación sin conexión
+// tras la primera carga. Solo funciona servido por http(s) o localhost, no con file://.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(e){
+      console.warn('Service worker no registrado:', e);
+    });
   });
 }
 </script>
